@@ -1,0 +1,122 @@
+{
+  "grid_rows": 3,
+  "grid_cols": 5,
+  "ocr_interval_sec": 0.5,
+  "cooldown_sec": 5,
+  "ocr_scale": 2.0,
+  "trigger_patterns": ["들어왔습니다"],
+  "use_regex_trigger": true,
+  "regex_patterns": [".*들어왔습니다.*"],
+  "monitor_mode": "all",
+  "use_easyocr": true,
+  "easyocr_languages": [
+    "ko"
+  ],
+  "require_min_triggers": 1,
+  "ocr_preprocess": {
+    "scale": 4.0,
+    "adaptive_thresh_blocksize": 15,
+    "adaptive_thresh_C": 4,
+    "use_morph_close": true,
+    "apply_sharpen": true,
+    "invert": true,
+    "gaussian_blur": true,
+    "contrast_enhance": true
+  },
+  "ocr_options": {
+    "lang": "kor",
+    "oem": 3,
+    "psm": 7,
+    "min_confidence": 40
+  },
+  "grid_overlay_enabled": true,
+  "chatroom_configs": [
+    {
+      "x": 1520,
+      "y": 108,
+      "width": 400,
+      "height": 600,
+      "input_x": 1720,
+      "input_y": 668,
+      "ocr_x": 1535,
+      "ocr_y": 108,
+      "ocr_w": 370,
+      "ocr_h": 600
+    },
+    {
+      "x": 670,
+      "y": 329,
+      "width": 400,
+      "height": 600,
+      "input_x": 870,
+      "input_y": 889,
+      "ocr_x": 685,
+      "ocr_y": 329,
+      "ocr_w": 370,
+      "ocr_h": 600
+    },
+    {
+      "ocr_x": 685,
+      "ocr_y": 329,
+      "ocr_w": 370,
+      "ocr_h": 600,
+      "input_x": 870,
+      "input_y": 889,
+      "x": 670,
+      "y": 329,
+      "width": 400,
+      "height": 600
+    },
+    {
+      "x": 669,
+      "y": 329,
+      "width": 400,
+      "height": 600,
+      "input_x": 869,
+      "input_y": 889,
+      "ocr_x": 684,
+      "ocr_y": 329,
+      "ocr_w": 370,
+      "ocr_h": 600
+    },
+    {
+      "x": 1520,
+      "y": 398,
+      "width": 400,
+      "height": 600,
+      "input_x": 1720,
+      "input_y": 958,
+      "ocr_x": 1535,
+      "ocr_y": 398,
+      "ocr_w": 370,
+      "ocr_h": 600
+    }
+  ],
+  "ocr_max_workers": 6,
+  "require_input_keyword": false,
+  "ui_constants": {
+    "ocr_area_y_offset": 100,
+    "ocr_area_height": 80,
+    "overlay_height": 120,
+    "grid_line_width": 3,
+    "trigger_box_color": [0, 255, 0],
+    "normal_box_color": [255, 255, 255],
+    "cooldown_box_color": [255, 0, 0]
+  },
+  "timing_config": {
+    "click_delay": 0.2,
+    "clipboard_delay": 0.1,
+    "paste_delay": 0.3,
+    "send_delay": 0.5,
+    "verification_delay": 0.5,
+    "cooldown_after_failure": 5.0
+  },
+  "automation_config": {
+    "max_retries": 3,
+    "clipboard_retry_count": 5,
+    "input_position_fallback_offset": 50,
+    "cells_per_cycle": 15,
+    "enable_batch_processing": true,
+    "max_concurrent_ocr": 6
+  }
+}

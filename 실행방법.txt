@@ -1,0 +1,52 @@
+카카오톡 챗봇 시스템 실행방법
+================================
+
+1. 자동 설치 및 실행 (권장)
+   - install.bat 파일을 더블클릭하여 실행
+   - 설치 완료 후 run.bat 파일을 더블클릭하여 실행
+
+2. 수동 설치 및 실행
+   
+   A. 가상환경 생성
+   ```
+   python -m venv chatbot_env
+   ```
+
+   B. 가상환경 활성화
+   ```
+   chatbot_env\Scripts\activate
+   ```
+
+   C. 패키지 설치
+   ```
+   pip install -r requirements.txt
+   ```
+
+   D. 실행
+   ```
+   python main.py
+   ```
+
+3. 문제 해결
+
+   A. Python 경로 오류가 발생하는 경우:
+   - Python 3.11 이상이 설치되어 있는지 확인
+   - 시스템 환경변수에 Python이 등록되어 있는지 확인
+
+   B. 패키지 설치 오류가 발생하는 경우:
+   - pip 업그레이드: python -m pip install --upgrade pip
+   - requirements_safe.txt 사용: pip install -r requirements_safe.txt
+
+   C. 모듈을 찾을 수 없는 경우:
+   - 가상환경이 활성화되어 있는지 확인
+   - src/ 폴더가 있는지 확인
+
+4. 시스템 요구사항
+   - Python 3.11 이상
+   - Windows 10/11
+   - 카카오톡 데스크톱 앱
+
+5. 주의사항
+   - 실행 전 카카오톡이 열려있어야 함
+   - 관리자 권한으로 실행하지 마세요
+   - 바이러스 백신이 실행을 차단할 수 있음 
