@@ -1,0 +1,54 @@
+카카오톡 챗봇 시스템 - 다른 컴퓨터로 이전하기
+============================================
+
+## 방법 1: USB/클라우드로 전체 폴더 복사 (가장 간단)
+
+1. 이 폴더 전체를 복사
+   - src/ 폴더
+   - tools/ 폴더
+   - tests/ 폴더
+   - *.py 파일들
+   - requirements.txt
+   - config.json
+
+2. 새 컴퓨터에서:
+   - 폴더 붙여넣기
+   - cmd 열고 해당 폴더로 이동
+   - python setup_on_new_pc.py 실행
+
+## 방법 2: Git 사용 (버전 관리 가능)
+
+1. GitHub/GitLab에 프라이빗 저장소 생성
+2. 현재 컴퓨터에서:
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin [저장소 URL]
+   git push -u origin main
+
+3. 새 컴퓨터에서:
+   git clone [저장소 URL]
+   cd [프로젝트 폴더]
+   python setup_on_new_pc.py
+
+## 방법 3: 최소 파일만 복사
+
+꼭 필요한 파일들:
+- main.py
+- requirements.txt
+- config.json
+- src/ 폴더 전체
+- tools/adjust_coordinates.py (좌표 조정용)
+
+## 새 컴퓨터에서 실행 순서:
+
+1. Python 3.11 설치 확인
+2. 프로젝트 폴더로 이동
+3. python setup_on_new_pc.py 실행
+4. run.bat 실행 (또는 python main.py)
+
+## 주의사항:
+
+- 화면 해상도가 다르면 좌표 재조정 필요
+- tools/adjust_coordinates.py로 좌표 조정
+- Windows Defender가 PaddleOCR을 차단할 수 있음 (예외 추가 필요)

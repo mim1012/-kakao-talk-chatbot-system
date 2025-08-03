@@ -8,13 +8,60 @@ from __future__ import annotations
 
 import sys
 import os
+import io
 from pathlib import Path
 from typing import NoReturn
+
+# Set environment variables before any imports
+os.environ['PPOCR_LOG_LEVEL'] = 'ERROR'
+os.environ['PADDLEX_LOG_LEVEL'] = 'ERROR'
+os.environ['PADDLE_LOG_LEVEL'] = 'ERROR'
+os.environ['PADDLEOCR_SHOW_PROGRESS'] = '0'
+os.environ['PADDLEX_SHOW_PROGRESS'] = '0'
+os.environ['TQDM_DISABLE'] = '1'
+
+# Set UTF-8 encoding for stdout
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Disable PaddleOCR logging and warnings
+import logging
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings('ignore')
+
+# Disable all paddle-related logging
+logging.getLogger('ppocr').setLevel(logging.ERROR)
+logging.getLogger('paddleocr').setLevel(logging.ERROR)
+logging.getLogger('paddle').setLevel(logging.ERROR)
+logging.getLogger('paddlex').setLevel(logging.ERROR)
+
+# Disable root logger for paddle
+logging.getLogger().setLevel(logging.WARNING)
+
+# Suppress Windows command output
+if sys.platform == "win32":
+    import subprocess
+    subprocess.STARTUPINFO = subprocess.STARTUPINFO()
+    subprocess.STARTUPINFO.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
 def setup_environment():
     """Setup the Python environment and paths."""
     # Get the directory where this script is located
     script_dir = Path(__file__).parent.absolute()
+    
+    # Set Qt plugin path before importing PyQt5 (Windows only)
+    if sys.platform == "win32":
+        # Find virtual environment path
+        venv_path = Path(sys.executable).parent.parent
+        qt_plugin_path = venv_path / "Lib" / "site-packages" / "PyQt5" / "Qt5" / "plugins"
+        
+        if qt_plugin_path.exists():
+            os.environ['QT_PLUGIN_PATH'] = str(qt_plugin_path)
+            os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = str(qt_plugin_path / "platforms")
+            print(f"Qt plugin path set: {qt_plugin_path}")
+        else:
+            print("Warning: Qt plugin path not found, GUI may not work properly")
     
     # Add src to Python path
     src_path = script_dir / "src"
@@ -65,12 +112,12 @@ def run_application() -> NoReturn:
     
     try:
         # Import the main application
-        from gui.optimized_chatbot_system import main
+        from gui.chatbot_gui import main
         # Run the main application
         main()
     except ImportError as e:
         print(f"Error: 모듈을 불러올 수 없습니다: {e}")
-        print("src/gui/optimized_chatbot_system.py 파일이 있는지 확인하세요.")
+        print("src/gui/chatbot_gui.py 파일이 있는지 확인하세요.")
         sys.exit(1)
     except Exception as e:
         print(f"Error: 애플리케이션 실행 중 오류가 발생했습니다: {e}")

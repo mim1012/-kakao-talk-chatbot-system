@@ -15,6 +15,7 @@ import time
 import queue
 import threading
 import logging
+import os
 from typing import Any
 import numpy as np
 import mss
@@ -39,6 +40,7 @@ from screeninfo import get_monitors
 # 리팩토링된 서비스들
 from core.service_container import ServiceContainer, MonitoringOrchestrator
 from core.grid_manager import GridCell, CellStatus
+from utils.suppress_output import suppress_stdout_stderr
 
 # PaddleOCR
 try:
@@ -71,16 +73,12 @@ class HighPerformanceOCREngine:
     def _init_paddle_ocr(self):
         """PaddleOCR 초기화 - 최대 성능 설정"""
         try:
-            self.paddle_ocr = PaddleOCR(
-                use_angle_cls=False,  # 각도 분류 비활성화 (속도 향상)
-                lang='korean',
-                enable_mkldnn=True,   # Intel MKL-DNN 가속
-                cpu_threads=4,        # CPU 스레드 증가
-                det_limit_side_len=960,  # 해상도 최적화
-                drop_score=0.2,       # 낮은 신뢰도도 감지
-                show_log=False,
-                use_gpu=False         # CPU 최적화
-            )
+            # Suppress all output during PaddleOCR initialization
+            with suppress_stdout_stderr():
+                self.paddle_ocr = PaddleOCR(
+                    lang='korean'
+                )
+                
             print("🚀 고성능 PaddleOCR 엔진 초기화 완료")
         except Exception as e:
             print(f"❌ PaddleOCR 초기화 실패: {e}")
@@ -434,8 +432,10 @@ class OptimizedChatbotGUI(QWidget):
         
         # 제어 버튼
         control_group = QGroupBox("제어")
-        control_layout = QHBoxLayout()
+        control_layout = QVBoxLayout()
         
+        # 첫 번째 행: 기본 제어 버튼
+        button_layout = QHBoxLayout()
         self.start_btn = QPushButton("모니터링 시작")
         self.stop_btn = QPushButton("모니터링 중지")
         self.overlay_btn = QPushButton("오버레이 표시")
@@ -444,9 +444,32 @@ class OptimizedChatbotGUI(QWidget):
         self.stop_btn.clicked.connect(self.stop_monitoring)
         self.overlay_btn.clicked.connect(self.toggle_overlay)
         
-        control_layout.addWidget(self.start_btn)
-        control_layout.addWidget(self.stop_btn)
-        control_layout.addWidget(self.overlay_btn)
+        button_layout.addWidget(self.start_btn)
+        button_layout.addWidget(self.stop_btn)
+        button_layout.addWidget(self.overlay_btn)
+        
+        # 두 번째 행: 오버레이 폭 조절
+        width_layout = QHBoxLayout()
+        width_layout.addWidget(QLabel("OCR 영역 폭:"))
+        
+        self.overlay_width_spinbox = QSpinBox()
+        self.overlay_width_spinbox.setMinimum(50)
+        self.overlay_width_spinbox.setMaximum(2000)
+        self.overlay_width_spinbox.setSingleStep(10)
+        self.overlay_width_spinbox.setValue(200)
+        self.overlay_width_spinbox.setSuffix("px")
+        self.overlay_width_spinbox.setToolTip("OCR 영역의 폭 (픽셀 단위, 10px씩 조절)")
+        self.overlay_width_spinbox.valueChanged.connect(self.on_overlay_width_changed)
+        
+        self.apply_width_btn = QPushButton("적용")
+        self.apply_width_btn.clicked.connect(self.apply_overlay_width)
+        
+        width_layout.addWidget(self.overlay_width_spinbox)
+        width_layout.addWidget(self.apply_width_btn)
+        width_layout.addStretch()
+        
+        control_layout.addLayout(button_layout)
+        control_layout.addLayout(width_layout)
         control_group.setLayout(control_layout)
         
         # 로그
@@ -492,6 +515,9 @@ class OptimizedChatbotGUI(QWidget):
         self.detection_count = 0
         self.success_count = 0
         self.failed_count = 0
+        
+        # 오버레이 폭 설정 (픽셀 단위)
+        self.current_overlay_width_pixels = 200
     
     def start_monitoring(self):
         """모니터링 시작"""
@@ -569,6 +595,74 @@ class OptimizedChatbotGUI(QWidget):
         # 스크롤을 맨 아래로
         scrollbar = self.log_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+    
+    def on_overlay_width_changed(self, value: int):
+        """오버레이 폭 값 변경 시 호출"""
+        # 실시간으로는 업데이트하지 않고, 적용 버튼을 통해서만 적용
+        pass
+    
+    def apply_overlay_width(self):
+        """오버레이 폭 적용"""
+        new_width_pixels = self.overlay_width_spinbox.value()
+        
+        if new_width_pixels == self.current_overlay_width_pixels:
+            self.log("🔧 동일한 폭입니다.")
+            return
+        
+        # 모니터링이 실행 중이면 중지
+        was_monitoring = False
+        if self.monitoring_thread and self.monitoring_thread.running:
+            was_monitoring = True
+            self.stop_monitoring()
+        
+        # 오버레이가 표시 중이면 숨김
+        was_overlay_visible = False
+        if self.overlay:
+            was_overlay_visible = True
+            self.toggle_overlay()
+        
+        # 새로운 폭으로 그리드 재생성
+        self.current_overlay_width_pixels = new_width_pixels
+        self._update_grid_with_new_width_pixels(new_width_pixels)
+        
+        # 오버레이가 표시되었다면 다시 표시
+        if was_overlay_visible:
+            self.toggle_overlay()
+        
+        # 모니터링이 실행 중이었다면 다시 시작
+        if was_monitoring:
+            self.start_monitoring()
+        
+        self.log(f"🔧 OCR 영역 폭을 {new_width_pixels}px로 변경했습니다.")
+    
+    def _update_grid_with_new_width_pixels(self, width_pixels: int):
+        """새로운 픽셀 폭으로 그리드 업데이트"""
+        try:
+            # 기존 셀들의 OCR 영역을 새로운 픽셀 폭으로 업데이트
+            for cell in self.services.grid_manager.cells:
+                cell_x, cell_y, cell_width, cell_height = cell.bounds
+                ocr_x, ocr_y, ocr_width, ocr_height = cell.ocr_area
+                
+                # 새로운 OCR 폭 설정
+                new_ocr_width = width_pixels
+                
+                # OCR 영역이 셀을 벗어나지 않도록 제한
+                max_ocr_width = cell_width
+                new_ocr_width = min(new_ocr_width, max_ocr_width)
+                
+                # OCR 영역을 셀 중앙으로 정렬
+                new_ocr_x = cell_x + (cell_width - new_ocr_width) // 2
+                
+                # OCR 영역 업데이트
+                cell.ocr_area = (new_ocr_x, ocr_y, new_ocr_width, ocr_height)
+            
+            # 셀 개수 업데이트 (변경되지 않지만 UI 새로고침용)
+            self.cell_count_label.setText(
+                f"총 셀 개수: {len(self.services.grid_manager.cells)}개 (OCR 폭: {width_pixels}px)"
+            )
+            
+        except Exception as e:
+            self.log(f"❌ 그리드 업데이트 오류: {e}")
     
     def closeEvent(self, event):
         """프로그램 종료 시 정리"""

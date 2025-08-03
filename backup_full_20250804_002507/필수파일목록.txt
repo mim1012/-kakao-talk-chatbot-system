@@ -1,0 +1,60 @@
+# 카카오톡 챗봇 시스템 - 필수 파일 목록 (새 구조)
+
+## 1. 루트 디렉토리 필수 파일
+main.py                     # 메인 진입점 (Qt 경로 자동 설정 포함)
+config.json                 # 설정 파일
+requirements.txt            # 패키지 의존성
+paddleocr_optimization.py   # PaddleOCR 최적화
+
+## 2. src 디렉토리 구조 및 파일
+
+### src/core/ (핵심 모듈)
+src/__init__.py
+src/core/__init__.py
+src/core/config_manager.py      # 설정 관리
+src/core/grid_manager.py        # 그리드/셀 관리  
+src/core/service_container.py   # 서비스 컨테이너
+
+### src/ocr/ (OCR 처리)
+src/ocr/__init__.py
+src/ocr/enhanced_ocr_service.py    # 향상된 OCR (다중 전처리)
+src/ocr/enhanced_ocr_corrector.py  # OCR 보정
+src/ocr/ocr_service.py             # 기본 OCR 서비스
+
+### src/monitoring/ (모니터링)
+src/monitoring/__init__.py
+src/monitoring/improved_monitoring_thread.py  # 개선된 모니터링 (이미지 캐시 포함)
+src/monitoring/monitor_manager.py            # 모니터 관리
+
+### src/automation/ (자동화)
+src/automation/__init__.py
+src/automation/automation_service.py         # 메시지 전송 자동화
+src/automation/smart_input_automation.py     # 스마트 입력
+
+### src/gui/ (GUI)
+src/gui/__init__.py
+src/gui/optimized_chatbot_system.py   # 메인 GUI (병렬 처리 포함)
+src/gui/grid_overlay_system.py        # 그리드 오버레이
+src/gui/complete_chatbot_system.py    # 전체 시스템
+src/gui/fixed_gui_system.py           # 고정 GUI
+
+## 3. tools 디렉토리 (도구)
+tools/__init__.py
+tools/verify_screen_coordinates.py  # 좌표 검증 도구
+tools/visual_cell_overlay.py        # 시각적 오버레이
+tools/adjust_coordinates.py         # 좌표 조정 도구
+
+## 4. 포함된 주요 기능
+✓ 메시지 전송 자동화 (automation_service.py)
+✓ 이미지 캐시 최적화 (improved_monitoring_thread.py)
+✓ 병렬 OCR 처리 (optimized_chatbot_system.py)
+✓ 다중 전처리 전략 (enhanced_ocr_service.py)
+✓ Qt 플러그인 자동 설정 (main.py)
+
+## 5. 체크리스트 (총 30개 파일)
+□ main.py
+□ config.json
+□ requirements.txt
+□ paddleocr_optimization.py
+□ src/ 디렉토리 전체
+□ tools/ 디렉토리 전체

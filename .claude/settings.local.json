@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(gemini:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)",
+      "Bash(powershell:*)",
+      "Bash(cat:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(run_with_qt.bat)",
+      "Bash(cmd /c:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(xcopy:*)",
+      "Bash(del \"h -u origin main\" nul)",
+      "Bash(git add:*)",
+      "Bash(del nul)"
+    ],
+    "deny": []
+  }
+}

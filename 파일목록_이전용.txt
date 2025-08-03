@@ -1,0 +1,117 @@
+# 카카오톡 챗봇 시스템 - 이전 필요 파일 목록
+
+## 1. 필수 파일 (반드시 필요)
+
+### 메인 진입점
+- main.py
+
+### 설정 파일
+- config.json
+- requirements.txt
+
+### 소스 코드 디렉토리 (src/)
+- src/__init__.py
+- src/core/__init__.py
+- src/core/config_manager.py
+- src/core/grid_manager.py
+- src/core/service_container.py
+- src/ocr/__init__.py
+- src/ocr/enhanced_ocr_service.py
+- src/ocr/enhanced_ocr_corrector.py
+- src/ocr/ocr_service.py
+- src/monitoring/__init__.py
+- src/monitoring/improved_monitoring_thread.py
+- src/monitoring/monitor_manager.py
+- src/automation/__init__.py
+- src/automation/automation_service.py
+- src/automation/smart_input_automation.py
+- src/gui/__init__.py
+- src/gui/optimized_chatbot_system.py
+- src/gui/grid_overlay_system.py
+- src/gui/complete_chatbot_system.py
+- src/gui/fixed_gui_system.py
+
+### 도구 디렉토리 (tools/)
+- tools/__init__.py
+- tools/verify_screen_coordinates.py
+- tools/visual_cell_overlay.py
+- tools/adjust_coordinates.py
+
+### 추가 필수 파일
+- paddleocr_optimization.py
+
+## 2. 선택 파일 (필요시)
+
+### 테스트 파일 (tests/)
+- tests/__init__.py
+- tests/test_basic_structure.py
+- tests/test_enhanced_detection.py
+- tests/test_integration.py
+- tests/test_ocr_detection.py
+- tests/test_refactored_system.py
+
+### 문서 (docs/)
+- README.md
+- docs/cleanup_report.md
+
+## 3. 디렉토리 구조 유지
+
+다음 디렉토리 구조를 동일하게 만들어야 합니다:
+
+카카오톡_챗봇_시스템/
+├── src/
+│   ├── core/
+│   ├── ocr/
+│   ├── monitoring/
+│   ├── automation/
+│   └── gui/
+├── tools/
+├── tests/ (선택)
+├── docs/ (선택)
+├── main.py
+├── config.json
+├── requirements.txt
+└── paddleocr_optimization.py
+
+## 4. 환경 설정 (새 컴퓨터에서)
+
+1. Python 3.8+ 설치
+2. 가상환경 생성:
+   python -m venv venv
+   venv\Scripts\activate (Windows)
+
+3. 의존성 설치:
+   pip install -r requirements.txt
+
+4. PaddleOCR 추가 설치 (필요시):
+   pip install paddlepaddle paddleocr
+
+## 5. 압축 명령어 (현재 컴퓨터에서)
+
+PowerShell에서:
+```powershell
+# 필수 파일만 압축
+Compress-Archive -Path @(
+    "main.py",
+    "config.json", 
+    "requirements.txt",
+    "paddleocr_optimization.py",
+    "src",
+    "tools"
+) -DestinationPath "chatbot_system_transfer.zip"
+```
+
+또는 전체 압축 (테스트, 문서 포함):
+```powershell
+Compress-Archive -Path @(
+    "main.py",
+    "config.json",
+    "requirements.txt", 
+    "paddleocr_optimization.py",
+    "src",
+    "tools",
+    "tests",
+    "docs",
+    "README.md"
+) -DestinationPath "chatbot_system_full.zip"
+```
