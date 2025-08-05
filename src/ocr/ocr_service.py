@@ -141,6 +141,10 @@ class OCRService:
             # Preprocess image
             processed_image = self.preprocess_image(image)
             
+            # PaddleOCR requires color images, convert grayscale to BGR
+            if len(processed_image.shape) == 2:
+                processed_image = cv2.cvtColor(processed_image, cv2.COLOR_GRAY2BGR)
+            
             # Perform OCR
             results = self.paddle_ocr.ocr(processed_image)
             
