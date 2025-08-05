@@ -48,9 +48,9 @@ class OptimizedParallelMonitor:
         )
         self.adaptive_strategy = AdaptiveMonitoringStrategy(self.priority_manager)
         
-        # 병렬 처리 설정
+        # 병렬 처리 설정 - OCR 워커를 1개로 제한
         self.capture_workers = config.get('parallel_processing', {}).get('capture_workers', 4)
-        self.ocr_workers = config.get('parallel_processing', {}).get('ocr_workers', 2)
+        self.ocr_workers = 1  # 멀티스레드 OCR 오류 방지
         
         # 스레드 풀
         self.capture_pool = ThreadPoolExecutor(max_workers=self.capture_workers)
