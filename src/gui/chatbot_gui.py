@@ -443,8 +443,8 @@ class RealTimeMonitoringThread(QThread):
                     print(f"[SEARCH] OCR 처리할 이미지 수: {len(images_with_regions)}")
                     for image, region, cell_id in images_with_regions:
                         try:
-                            # OCR 수행
-                            result = self.ocr_engine.ocr_service.perform_ocr(image)
+                            # EnhancedOCRService의 perform_ocr_with_recovery 사용
+                            result = self.ocr_engine.ocr_service.perform_ocr_with_recovery(image, cell_id)
                             ocr_results.append(result)
                         except Exception as e:
                             print(f"OCR 처리 오류 ({cell_id}): {e}")
