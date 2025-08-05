@@ -48,9 +48,9 @@ class OptimizedParallelMonitor:
         )
         self.adaptive_strategy = AdaptiveMonitoringStrategy(self.priority_manager)
         
-        # 병렬 처리 설정 - OCR 워커를 1개로 제한
+        # 병렬 처리 설정
         self.capture_workers = config.get('parallel_processing', {}).get('capture_workers', 4)
-        self.ocr_workers = 1  # 멀티스레드 OCR 오류 방지
+        self.ocr_workers = config.get('parallel_processing', {}).get('ocr_workers', 4)  # 설정에서 읽기
         
         # 스레드 풀
         self.capture_pool = ThreadPoolExecutor(max_workers=self.capture_workers)
@@ -90,6 +90,11 @@ class OptimizedParallelMonitor:
     
     def _monitor_loop(self):
         """메인 모니터링 루프"""
+        # 초기화 단계: 모든 셀에 대해 첫 OCR 스캔 수행
+        logger.info("초기화: 모든 셀에 대한 첫 OCR 스캔 시작...")
+        self._initialize_all_cells()
+        logger.info("초기화 완료: 모든 셀이 OCR 처리됨")
+        
         while self.running:
             try:
                 cycle_start = time.time()
@@ -134,6 +139,85 @@ class OptimizedParallelMonitor:
             except Exception as e:
                 logger.error(f"모니터링 루프 오류: {e}")
                 time.sleep(1)
+    
+    def _initialize_all_cells(self):
+        """모든 셀에 대해 초기 OCR 스캔 수행"""
+        all_cell_ids = [cell.id for cell in self.grid_manager.cells]
+        uninitialized = self.change_detector.get_uninitialized_cells(all_cell_ids)
+        
+        if not uninitialized:
+            logger.info("모든 셀이 이미 초기화됨")
+            return
+        
+        logger.info(f"초기화할 셀 수: {len(uninitialized)}")
+        
+        # 배치로 나누어 처리 (메모리 효율성)
+        batch_size = 5
+        for i in range(0, len(uninitialized), batch_size):
+            batch = uninitialized[i:i+batch_size]
+            logger.info(f"초기화 배치 {i//batch_size + 1}/{(len(uninitialized) + batch_size - 1)//batch_size}: {batch}")
+            
+            # 각 셀에 대해 캡처 및 OCR 수행 (변화 감지 우회)
+            futures = []
+            for cell_id in batch:
+                future = self.capture_pool.submit(self._initialize_cell, cell_id)
+                futures.append((future, cell_id))
+            
+            # 결과 대기
+            for future, cell_id in futures:
+                try:
+                    future.result(timeout=10)  # 10초 타임아웃
+                except Exception as e:
+                    logger.error(f"셀 {cell_id} 초기화 실패: {e}")
+            
+            # 배치 간 잠시 대기
+            time.sleep(0.5)
+    
+    def _initialize_cell(self, cell_id: str):
+        """단일 셀 초기화 (첫 OCR 수행)"""
+        try:
+            # 셀 정보 가져오기
+            cell = next((c for c in self.grid_manager.cells if c.id == cell_id), None)
+            if not cell:
+                logger.error(f"셀 {cell_id}를 찾을 수 없음")
+                return
+            
+            # 이미지 캡처
+            with mss.mss() as sct:
+                region = cell.region
+                monitor = {
+                    "left": region[0],
+                    "top": region[1], 
+                    "width": region[2] - region[0],
+                    "height": region[3] - region[1]
+                }
+                screenshot = sct.grab(monitor)
+                image = np.array(screenshot)
+            
+            # BGR로 변환 (mss는 BGRA 반환)
+            if image.shape[2] == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+            
+            # 변화 감지기에 등록 (첫 캡처이므로 항상 True 반환)
+            self.change_detector.has_changed(cell_id, image)
+            
+            # OCR 수행
+            ocr_result, trigger_found = self._perform_ocr(cell_id, image)
+            
+            if trigger_found:
+                logger.info(f"🎯 초기화 중 트리거 발견: {cell_id}")
+                self.result_queue.put(MonitoringResult(
+                    cell_id=cell_id,
+                    has_change=True,
+                    trigger_found=True,
+                    ocr_result=ocr_result,
+                    processing_time=0
+                ))
+            
+            logger.info(f"셀 {cell_id} 초기화 완료")
+            
+        except Exception as e:
+            logger.error(f"셀 {cell_id} 초기화 오류: {e}")
     
     def _parallel_process_cells(self, cell_ids: List[str]) -> List[MonitoringResult]:
         """셀들을 병렬로 처리"""

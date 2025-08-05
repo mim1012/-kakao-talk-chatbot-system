@@ -25,6 +25,7 @@ class ChangeDetectionMonitor:
         self.last_change_time: Dict[str, float] = {}
         self.skip_count = 0
         self.total_checks = 0
+        self.is_initialized: Dict[str, bool] = {}  # 각 셀의 초기화 상태 추적
         
     def has_changed(self, cell_id: str, current_image: np.ndarray) -> bool:
         """
@@ -39,10 +40,12 @@ class ChangeDetectionMonitor:
         """
         self.total_checks += 1
         
-        # 첫 번째 캡처는 항상 변화로 간주
+        # 첫 번째 캡처는 항상 변화로 간주 (초기 OCR 처리를 위해)
         if cell_id not in self.previous_images:
             self.previous_images[cell_id] = current_image.copy()
             self.last_change_time[cell_id] = time.time()
+            self.is_initialized[cell_id] = True  # 초기화 완료 표시
+            logger.info(f"셀 {cell_id}: 초기 OCR 처리를 위해 변화로 간주")
             return True
             
         try:
@@ -140,9 +143,11 @@ class ChangeDetectionMonitor:
         if cell_id:
             self.previous_images.pop(cell_id, None)
             self.last_change_time.pop(cell_id, None)
+            self.is_initialized.pop(cell_id, None)
         else:
             self.previous_images.clear()
             self.last_change_time.clear()
+            self.is_initialized.clear()
     
     def get_statistics(self) -> Dict[str, float]:
         """
@@ -155,7 +160,8 @@ class ChangeDetectionMonitor:
             "skipped_ocr": self.skip_count,
             "skip_ratio": skip_ratio,
             "efficiency_gain": skip_ratio * 100,  # 퍼센트로 표시
-            "active_cells": len(self.previous_images)
+            "active_cells": len(self.previous_images),
+            "initialized_cells": len(self.is_initialized)
         }
     
     def get_cell_idle_time(self, cell_id: str) -> float:
@@ -165,6 +171,18 @@ class ChangeDetectionMonitor:
         if cell_id in self.last_change_time:
             return time.time() - self.last_change_time[cell_id]
         return 0.0
+    
+    def is_cell_initialized(self, cell_id: str) -> bool:
+        """
+        특정 셀이 초기 OCR 처리를 완료했는지 확인
+        """
+        return self.is_initialized.get(cell_id, False)
+    
+    def get_uninitialized_cells(self, all_cell_ids: list[str]) -> list[str]:
+        """
+        아직 초기화되지 않은 셀 ID 목록 반환
+        """
+        return [cell_id for cell_id in all_cell_ids if not self.is_cell_initialized(cell_id)]
 
 
 class AdaptiveChangeDetector:

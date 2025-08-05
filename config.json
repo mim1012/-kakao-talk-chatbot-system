@@ -1,11 +1,12 @@
 {
   "grid_rows": 3,
   "grid_cols": 5,
-  "ocr_interval_sec": 2.0,
+  "ocr_interval_sec": 0.5,
+  "fast_ocr_mode": true,
   "parallel_processing": {
     "enabled": false,
     "capture_workers": 4,
-    "ocr_workers": 2,
+    "ocr_workers": 4,
     "zone_count": 3,
     "comment": "병렬 처리 설정 (실험적 기능)"
   },
@@ -129,6 +130,6 @@
     "input_position_fallback_offset": 50,
     "cells_per_cycle": 15,
     "enable_batch_processing": true,
-    "max_concurrent_ocr": 1
+    "max_concurrent_ocr": 4
   }
 }

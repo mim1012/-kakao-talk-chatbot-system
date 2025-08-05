@@ -10,7 +10,7 @@ import threading
 import numpy as np
 from typing import Any
 from core.config_manager import ConfigManager
-from ocr.ocr_service import OCRService
+from ocr.enhanced_ocr_service import EnhancedOCRService
 from automation.automation_service import AutomationService, DefaultInputManager, DefaultClipboardManager
 from core.grid_manager import GridManager, GridCell, CellStatus
 
@@ -24,7 +24,7 @@ class ServiceContainer:
         
         # Initialize services in dependency order
         self._config_manager = ConfigManager(config_path)
-        self._ocr_service = OCRService(self._config_manager)
+        self._ocr_service = EnhancedOCRService(self._config_manager)
         self._input_manager = DefaultInputManager(self._config_manager)
         self._clipboard_manager = DefaultClipboardManager(self._config_manager)
         self._automation_service = AutomationService(
@@ -49,7 +49,7 @@ class ServiceContainer:
         return self._config_manager
     
     @property
-    def ocr_service(self) -> OCRService:
+    def ocr_service(self) -> EnhancedOCRService:
         """Get the OCR service."""
         return self._ocr_service
     

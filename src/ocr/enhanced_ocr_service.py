@@ -220,6 +220,53 @@ class EnhancedOCRService:
     
     def preprocess_image_enhanced(self, image: np.ndarray, cell_id: str = "") -> list[np.ndarray]:
         """Enhanced preprocessing with multiple strategies."""
+        # 빠른 모드 확인
+        fast_mode = self.config.get('fast_ocr_mode', True)
+        
+        if fast_mode:
+            return self._preprocess_fast(image, cell_id)
+        
+        # 기존의 복잡한 전처리 (비활성화)
+        return self._preprocess_full(image, cell_id)
+    
+    def _preprocess_fast(self, image: np.ndarray, cell_id: str = "") -> list[np.ndarray]:
+        """빠른 전처리 - 최소한의 처리만"""
+        preprocessed_images = []
+        
+        try:
+            # RGBA 처리
+            if len(image.shape) == 3 and image.shape[2] == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+            
+            # 그레이스케일 변환
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = image.copy()
+            
+            # 1. 원본 (이미 깨끗한 텍스트용)
+            preprocessed_images.append(image.copy())
+            
+            # 2. 간단한 이진화 (OTSU)
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            preprocessed_images.append(binary)
+            
+            # 3. 크기가 작으면 2배 확대 후 이진화
+            height, width = gray.shape
+            if width < 400 or height < 150:
+                upscaled = cv2.resize(gray, (width * 2, height * 2), interpolation=cv2.INTER_LINEAR)
+                _, binary_upscaled = cv2.threshold(upscaled, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                preprocessed_images.append(binary_upscaled)
+            
+            return preprocessed_images
+            
+        except Exception as e:
+            self.logger.error(f"Fast preprocessing failed: {e}")
+            return [image]
+    
+    def _preprocess_full(self, image: np.ndarray, cell_id: str = "") -> list[np.ndarray]:
+        """기존의 전체 전처리 (현재 비활성화)"""
+        # 기존 코드를 여기로 이동...
         preprocessed_images = []
         
         try:
@@ -354,6 +401,11 @@ class EnhancedOCRService:
                                 print(f"   [{idx}] '{t}' (신뢰도: {c:.2f})")
                         
                         for j, (text, confidence) in enumerate(text_confidence_pairs):
+                                # 로그 텍스트 필터링
+                                if self._is_log_text(text):
+                                    if self.debug_mode:
+                                        self.logger.debug(f"{cell_id}: 로그 텍스트 건너뛰기 - '{text}'")
+                                    continue
                                 
                                 # Log only high confidence detections in debug mode
                                 if self.debug_mode and confidence > 0.7:
@@ -403,6 +455,12 @@ class EnhancedOCRService:
                                     text = detection[1][0]
                                     confidence = detection[1][1]
                                     
+                                    # 로그 텍스트 필터링
+                                    if self._is_log_text(text):
+                                        if self.debug_mode:
+                                            self.logger.debug(f"{cell_id}: 로그 텍스트 건너뛰기 - '{text}'")
+                                        continue
+                                    
                                     # Log only high confidence detections in debug mode
                                     if self.debug_mode and confidence > 0.7:
                                         self.logger.debug(f"{cell_id} Strategy {i}: '{text}' (conf: {confidence:.2f})")
@@ -450,6 +508,11 @@ class EnhancedOCRService:
             for res in all_results:
                 text = res.get('text', '')
                 conf = res.get('confidence', 0)
+                
+                # 로그 텍스트는 건너뛰기
+                if self._is_log_text(text):
+                    continue
+                    
                 for pattern in self.config.get('trigger_patterns', []):
                     if pattern in text and conf > best_trigger_confidence:
                         best_trigger_confidence = conf
@@ -551,6 +614,11 @@ class EnhancedOCRService:
         
         text = ocr_result.text
         
+        # 로그 텍스트 필터링 - OCR이 로그 창을 읽는 것 방지
+        if self._is_log_text(text):
+            self.logger.debug(f"로그 텍스트 필터링: '{text}'")
+            return False
+        
         # Filter out obvious non-Korean text
         if self._is_non_korean_text(text):
             self.logger.debug(f"Filtered non-Korean text: '{text}'")
@@ -563,6 +631,30 @@ class EnhancedOCRService:
             self.logger.info(f"🎯 Trigger pattern detected: '{text}' -> '{matched_pattern}'")
             return True
         
+        return False
+    
+    def _is_log_text(self, text: str) -> bool:
+        """로그 창의 텍스트인지 확인"""
+        # 로그 패턴들
+        log_patterns = [
+            r'\[\d{2}:\d{2}:\d{2}\]',  # [02:23:40] 같은 타임스탬프
+            r'OCR \uac10\uc9c0:',  # 'OCR 감지:' 텍스트
+            r'\uac10\uc9c0:',  # '감지:' 텍스트
+            r'\uc790\ub3d9\ud654:',  # '자동화:' 텍스트
+            r'\[TARGET\]',  # '[TARGET]' 텍스트
+            r'\[OK\]',  # '[OK]' 텍스트
+            r'\uc2e0\ub8b0\ub3c4:',  # '신뢰도:' 텍스트
+            r'monitor_\d+_cell_\d+_\d+',  # 셀 ID 패턴
+        ]
+        
+        for pattern in log_patterns:
+            if re.search(pattern, text):
+                return True
+        
+        # 로그에서 흔히 볼 수 있는 특수 문자 조합
+        if "'(" in text and ")" in text:  # '(신뢰도:' 같은 패턴
+            return True
+            
         return False
     
     def _is_non_korean_text(self, text: str) -> bool:
