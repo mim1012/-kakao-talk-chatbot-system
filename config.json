@@ -1,12 +1,12 @@
 {
   "grid_rows": 3,
   "grid_cols": 5,
-  "ocr_interval_sec": 0.5,
+  "ocr_interval_sec": 0.3,
   "cooldown_sec": 5,
   "ocr_scale": 2.0,
-  "trigger_patterns": ["들어왔습니다"],
+  "trigger_patterns": ["들어왔습니다", "님이", "입장", "들어왔", "참여"],
   "use_regex_trigger": true,
-  "regex_patterns": [".*들어왔습니다.*"],
+  "regex_patterns": [".*(들어왔습니다|님이|입장|들어왔|참여).*"],
   "monitor_mode": "all",
   "use_easyocr": true,
   "easyocr_languages": [
@@ -15,13 +15,14 @@
   "require_min_triggers": 1,
   "ocr_preprocess": {
     "scale": 4.0,
-    "adaptive_thresh_blocksize": 15,
-    "adaptive_thresh_C": 4,
+    "adaptive_thresh_blocksize": 11,
+    "adaptive_thresh_C": 2,
     "use_morph_close": true,
     "apply_sharpen": true,
     "invert": true,
-    "gaussian_blur": true,
-    "contrast_enhance": true
+    "gaussian_blur": false,
+    "contrast_enhance": true,
+    "simple_mode": false
   },
   "ocr_options": {
     "lang": "kor",
@@ -97,7 +98,7 @@
   "ui_constants": {
     "ocr_area_y_offset": 80,
     "ocr_area_height": 80,
-    "overlay_height": 120,
+    "overlay_height": 100,
     "grid_line_width": 3,
     "trigger_box_color": [0, 255, 0],
     "normal_box_color": [255, 255, 255],
@@ -110,6 +111,10 @@
     "send_delay": 0.5,
     "verification_delay": 0.5,
     "cooldown_after_failure": 5.0
+  },
+  "input_box_offset": {
+    "from_bottom": 8,
+    "comment": "셀 하단에서 위로 몇 픽셀 위치를 클릭할지 설정"
   },
   "automation_config": {
     "max_retries": 3,

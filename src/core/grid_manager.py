@@ -146,11 +146,13 @@ class GridManager:
                         cell_y = monitor.y + row * cell_height
                         cell_bounds = (cell_x, cell_y, cell_width, cell_height)
                         
-                        # Calculate OCR area at the bottom of the cell
+                        # Calculate OCR area - 셀 하단 오버레이 영역만 스캔
+                        # GUI에서 설정 가능한 오버레이 영역 (기본값 100px)
+                        overlay_height = ui_constants.overlay_height if hasattr(ui_constants, 'overlay_height') else 100
                         ocr_x = cell_x
-                        ocr_y = cell_y + cell_height - ui_constants.ocr_area_height  # OCR area at bottom
-                        ocr_width = cell_width
-                        ocr_height = ui_constants.ocr_area_height
+                        ocr_y = cell_y + cell_height - overlay_height  # 셀 하단 오버레이 영역
+                        ocr_width = cell_width  # 너비는 셀 전체
+                        ocr_height = overlay_height  # GUI에서 설정된 높이
                         ocr_area = (ocr_x, ocr_y, ocr_width, ocr_height)
                         
                         # Create cell

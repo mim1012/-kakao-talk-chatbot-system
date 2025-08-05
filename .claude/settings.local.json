@@ -19,7 +19,18 @@
       "Bash(xcopy:*)",
       "Bash(del \"h -u origin main\" nul)",
       "Bash(git add:*)",
-      "Bash(del nul)"
+      "Bash(del nul)",
+      "Bash(git push:*)",
+      "Bash(git config:*)",
+      "Bash(venvScriptsactivate.bat)",
+      "Bash(venv/Scripts/python.exe -m pip install:*)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(start python main.py)",
+      "Bash(venvScripts:*)",
+      "Bash(venv\\Scripts\\python.exe:*)",
+      "Bash(.venvScriptspython.exe --version)",
+      "Bash(.\\venv\\Scripts\\python.exe -m pip uninstall:*)"
     ],
     "deny": []
   }

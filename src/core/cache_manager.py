@@ -270,6 +270,24 @@ class CacheManager:
         self.ocr_cache.cache.clear()
         self.logger.info("모든 캐시 초기화 완료")
     
+    def increase_cache_size(self, factor: float = 1.5):
+        """캐시 크기 증가"""
+        try:
+            # 이미지 캐시 크기 증가
+            old_size = self.image_cache.cache.max_size
+            new_size = int(old_size * factor)
+            self.image_cache.cache.max_size = new_size
+            self.logger.info(f"이미지 캐시 크기 증가: {old_size} -> {new_size}")
+            
+            # OCR 캐시 크기 증가
+            old_ocr_size = self.ocr_cache.cache.max_size
+            new_ocr_size = int(old_ocr_size * factor)
+            self.ocr_cache.cache.max_size = new_ocr_size
+            self.logger.info(f"OCR 캐시 크기 증가: {old_ocr_size} -> {new_ocr_size}")
+            
+        except Exception as e:
+            self.logger.error(f"캐시 크기 증가 실패: {e}")
+    
     def save_cache_to_disk(self):
         """캐시를 디스크에 저장"""
         try:

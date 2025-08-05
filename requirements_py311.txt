@@ -1,0 +1,39 @@
+# Python 3.11용 패키지 목록
+# 테스트 완료된 버전들
+
+# Core dependencies
+numpy==1.24.3           # Python 3.11과 호환되는 안정 버전
+opencv-python==4.6.0.66 # OpenCV Python 바인딩 (PaddleOCR 호환)
+Pillow==10.1.0         # 이미지 처리
+
+# GUI
+PyQt5==5.15.10         # GUI 프레임워크
+PyQt5-Qt5==5.15.2      # Qt5 바이너리
+PyQt5-sip==12.13.0     # PyQt5 SIP 바인딩
+
+# Screen capture and automation
+mss==9.0.1             # 빠른 스크린 캡처
+pyautogui==0.9.54      # 마우스/키보드 자동화
+pyperclip==1.8.2       # 클립보드 제어
+screeninfo==0.8.1      # 모니터 정보
+
+# OCR
+paddlepaddle==2.5.2    # PaddlePaddle 프레임워크 (Python 3.11 호환)
+paddleocr==2.7.0.3     # PaddleOCR
+
+# Utilities
+pyyaml==6.0.1          # YAML 파싱
+requests==2.31.0       # HTTP 요청
+python-dotenv==1.0.0   # 환경변수 관리
+
+# Performance
+psutil==5.9.6          # 시스템 모니터링
+cachetools==5.3.2      # 캐싱 유틸리티
+
+# Development tools (optional)
+pytest==7.4.3          # 테스트 프레임워크
+pytest-cov==4.1.0      # 코드 커버리지
+pytest-mock==3.12.0    # Mock 테스트
+
+# Logging
+colorlog==6.8.0        # 컬러 로깅

@@ -275,22 +275,25 @@ class PerformanceOptimizer:
         self.reduced_ocr_workers = False
         
     def analyze_and_optimize(self, metrics: PerformanceMetrics):
-        """성능 분석 및 최적화"""
+        """성능 분석 및 최적화 (워커 수 유지)"""
         recommendations = []
         
         # CPU 사용률 체크
         if metrics.cpu_percent > self.cpu_threshold:
-            recommendations.append("CPU 사용률이 높습니다. OCR 워커 수를 줄이는 것을 권장합니다.")
-            self.reduced_ocr_workers = True
+            recommendations.append("CPU 사용률이 높습니다. 이미지 전처리 최적화를 활성화합니다.")
+            # 워커 수는 유지하고 다른 최적화 적용
+            self.optimization_active = True
         
         # 메모리 사용량 체크
         if metrics.memory_mb > self.memory_threshold:
-            recommendations.append("메모리 사용량이 높습니다. 배치 크기를 줄이는 것을 권장합니다.")
+            recommendations.append("메모리 사용량이 높습니다. 캐시 정리 주기를 단축합니다.")
             self.reduced_batch_size = True
         
         # OCR 레이턴시 체크
         if metrics.ocr_latency_ms and metrics.ocr_latency_ms > self.latency_threshold:
-            recommendations.append("OCR 레이턴시가 높습니다. 이미지 전처리를 최적화하세요.")
+            recommendations.append(f"OCR 레이턴시가 높습니다 ({metrics.ocr_latency_ms:.1f}ms). 간소화 모드를 활성화합니다.")
+            # 워커 수는 유지하면서 전처리 간소화
+        # 양호한 상태에서는 제안하지 않음
         
         return recommendations
     

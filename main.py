@@ -19,6 +19,10 @@ os.environ['PADDLE_LOG_LEVEL'] = 'ERROR'
 os.environ['PADDLEOCR_SHOW_PROGRESS'] = '0'
 os.environ['PADDLEX_SHOW_PROGRESS'] = '0'
 os.environ['TQDM_DISABLE'] = '1'
+os.environ['GLOG_v'] = '0'
+os.environ['GLOG_logtostderr'] = '0'
+os.environ['GLOG_minloglevel'] = '3'
+os.environ['FLAGS_logtostderr'] = '0'
 
 # Set UTF-8 encoding for stdout
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -27,28 +31,70 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 import logging
 import warnings
 
-# Suppress all warnings
+# Suppress all warnings (강화)
 warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-# Disable all paddle-related logging
-logging.getLogger('ppocr').setLevel(logging.ERROR)
-logging.getLogger('paddleocr').setLevel(logging.ERROR)
-logging.getLogger('paddle').setLevel(logging.ERROR)
-logging.getLogger('paddlex').setLevel(logging.ERROR)
+# Disable all paddle-related logging (강화)
+logging.getLogger('ppocr').setLevel(logging.CRITICAL)
+logging.getLogger('paddleocr').setLevel(logging.CRITICAL)
+logging.getLogger('paddle').setLevel(logging.CRITICAL)
+logging.getLogger('paddlex').setLevel(logging.CRITICAL)
+logging.getLogger('ppocr.PaddleOCR').setLevel(logging.CRITICAL)
 
 # Disable root logger for paddle
-logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger().setLevel(logging.ERROR)
+
+# 추가 로깅 차단
+
+# Windows DPI 및 마우스 제어 설정
+if sys.platform == 'win32':
+    import ctypes
+    try:
+        # DPI Aware 설정 (고해상도 디스플레이 지원)
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+        except:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except:
+        pass
+    
+    # PyAutoGUI 마우스 제어 문제 해결
+    try:
+        import pyautogui
+        pyautogui.FAILSAFE = False
+        pyautogui.PAUSE = 0
+        
+        # Windows에서 ctypes 직접 사용하도록 패치
+        import pyautogui._pyautogui_win as platformModule
+        def fixed_moveTo(x, y):
+            ctypes.windll.user32.SetCursorPos(int(x), int(y))
+        platformModule._moveTo = fixed_moveTo
+    except:
+        pass
+for logger_name in ['ppocr', 'paddleocr', 'paddle', 'paddlex']:
+    logger = logging.getLogger(logger_name)
+    logger.disabled = True
+    logger.propagate = False
 
 # Suppress Windows command output
 if sys.platform == "win32":
     import subprocess
-    subprocess.STARTUPINFO = subprocess.STARTUPINFO()
-    subprocess.STARTUPINFO.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    # STARTUPINFO 클래스를 인스턴스로 덮어쓰지 않도록 수정
+    # 이는 나중에 subprocess 모듈이 사용될 때 문제를 일으킴
 
 def setup_environment():
     """Setup the Python environment and paths."""
     # Get the directory where this script is located
     script_dir = Path(__file__).parent.absolute()
+    
+    # Add src directory to Python path
+    src_path = script_dir / "src"
+    if src_path.exists() and str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
+        print(f"Python path: Added {src_path}")
     
     # Set Qt plugin path before importing PyQt5 (Windows only)
     if sys.platform == "win32":
@@ -111,13 +157,29 @@ def run_application() -> NoReturn:
     print("=" * 60)
     
     try:
-        # Import the main application
-        from gui.chatbot_gui import main
-        # Run the main application
-        main()
+        # Import and run the GUI application
+        from PyQt5.QtWidgets import QApplication
+        from gui.chatbot_gui import UnifiedChatbotGUI
+        
+        print("✅ GUI 모듈 로드 완료")
+        
+        # QApplication 생성 및 실행
+        app = QApplication(sys.argv)
+        app.setApplicationName("카카오톡 OCR 챗봇")
+        
+        # 메인 윈도우 생성 및 표시
+        window = UnifiedChatbotGUI()
+        window.show()
+        
+        print("✅ GUI 시작됨 - 모니터링 시작 버튼을 클릭하세요")
+        print("📌 오버레이 표시 버튼을 클릭하면 화면에 그리드가 표시됩니다")
+        
+        # 이벤트 루프 실행
+        sys.exit(app.exec_())
+            
     except ImportError as e:
         print(f"Error: 모듈을 불러올 수 없습니다: {e}")
-        print("src/gui/chatbot_gui.py 파일이 있는지 확인하세요.")
+        print("필요한 패키지가 설치되었는지 확인하세요.")
         sys.exit(1)
     except Exception as e:
         print(f"Error: 애플리케이션 실행 중 오류가 발생했습니다: {e}")

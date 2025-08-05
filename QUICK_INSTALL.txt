@@ -1,0 +1,29 @@
+========================================
+PowerShell에서 복사-붙여넣기
+========================================
+
+가상환경이 활성화된 상태에서 아래 명령어를 한 줄씩 실행:
+
+1. PaddlePaddle 설치:
+pip install paddlepaddle==2.5.2
+
+2. PaddleOCR 설치:
+pip install paddleocr==2.7.0.3
+
+3. 확인:
+python -c "from paddleocr import PaddleOCR; print('성공')"
+
+4. 실행:
+python main.py
+
+========================================
+또는 스크립트로 설치:
+========================================
+
+python install_paddle_simple.py
+
+========================================
+배치 파일로 설치:
+========================================
+
+.\install_paddleocr_venv.bat

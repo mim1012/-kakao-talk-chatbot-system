@@ -73,29 +73,45 @@ class OptimizedOCRService:
         self.cache_hit_count = 0
         
     def _init_paddle_ocr(self):
-        """PaddleOCR 초기화 (GPU 지원 포함)"""
+        """PaddleOCR 초기화 (완전 로깅 차단)"""
         try:
+            # 로깅 완전 차단
+            import logging
+            import os
+            
+            # 환경변수 설정
+            os.environ['PPOCR_LOG_LEVEL'] = 'CRITICAL'
+            os.environ['PADDLE_LOG_LEVEL'] = 'CRITICAL'
+            os.environ['FLAGS_logtostderr'] = '0'
+            os.environ['GLOG_minloglevel'] = '3'
+            os.environ['GLOG_v'] = '0'
+            
+            # 로깅 비활성화
+            for name in ['ppocr', 'paddleocr', 'paddle', 'paddlex']:
+                logger = logging.getLogger(name)
+                logger.setLevel(logging.CRITICAL)
+                logger.disabled = True
+                logger.propagate = False
+            
             with suppress_stdout_stderr():
+                # 최소한의 설정으로 초기화
                 self.paddle_ocr = PaddleOCR(
                     lang='korean',
-                    use_gpu=self.use_gpu,
-                    gpu_id=self.gpu_id,
-                    use_angle_cls=True,
-                    det=True,
-                    rec=True,
-                    cls=True,
-                    show_log=False
+                    use_angle_cls=False,
+                    show_log=False,
+                    det_db_thresh=0.3,
+                    det_db_box_thresh=0.5,
+                    rec_batch_num=1  # 배치 크기 최소화
                 )
             
-            gpu_status = "GPU" if self.use_gpu else "CPU"
-            self.logger.info(f"PaddleOCR 초기화 완료 ({gpu_status} 모드)")
+            self.logger.info(f"PaddleOCR 초기화 완료")
             
         except Exception as e:
             self.logger.error(f"PaddleOCR 초기화 실패: {e}")
             self.paddle_ocr = None
     
     def preprocess_image_optimized(self, image: np.ndarray) -> np.ndarray:
-        """최적화된 이미지 전처리"""
+        """최적화된 이미지 전처리 (간소화 모드 지원)"""
         start_time = time.time()
         
         # 캐시 확인
@@ -104,36 +120,50 @@ class OptimizedOCRService:
             return cached
         
         try:
-            # 크기 조정 (동적 스케일)
-            height, width = image.shape[:2]
-            scale = self._calculate_optimal_scale(width, height)
+            # 간소화 모드 확인 (레이턴시 1초 이상이면 강제 활성화)
+            simple_mode = self.config._config.get('ocr_preprocess', {}).get('simple_mode', False)
             
-            if scale != 1.0:
-                new_width = int(width * scale)
-                new_height = int(height * scale)
-                image = cv2.resize(image, (new_width, new_height), 
-                                 interpolation=cv2.INTER_CUBIC)
-            
-            # 그레이스케일 변환
-            if len(image.shape) == 3:
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            # 최대 간소화 모드 (가장 빠른 처리)
+            if simple_mode:
+                # 그레이스케일 변환만
+                if len(image.shape) == 3:
+                    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                else:
+                    gray = image
+                
+                # 단순 크기 조정 (2배만)
+                height, width = gray.shape[:2]
+                if min(width, height) < 100:
+                    gray = cv2.resize(gray, (width*2, height*2), interpolation=cv2.INTER_LINEAR)
+                
+                # 간단한 임계값 처리만
+                _, processed = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+                
             else:
-                gray = image
-            
-            # 노이즈 제거
-            denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-            
-            # 대비 향상 (CLAHE)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(denoised)
-            
-            # 이진화
-            _, binary = cv2.threshold(enhanced, 0, 255, 
-                                    cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-            
-            # 모폴로지 연산
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-            processed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+                # 일반 모드 (기존 처리)
+                # 크기 조정 (동적 스케일)
+                height, width = image.shape[:2]
+                scale = self._calculate_optimal_scale(width, height)
+                
+                if scale != 1.0:
+                    new_width = int(width * scale)
+                    new_height = int(height * scale)
+                    image = cv2.resize(image, (new_width, new_height), 
+                                     interpolation=cv2.INTER_CUBIC)
+                
+                # 그레이스케일 변환
+                if len(image.shape) == 3:
+                    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                else:
+                    gray = image
+                
+                # 대비 향상만 (노이즈 제거 생략)
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                enhanced = clahe.apply(gray)
+                
+                # 이진화
+                _, processed = cv2.threshold(enhanced, 0, 255, 
+                                           cv2.THRESH_BINARY | cv2.THRESH_OTSU)
             
             # 캐시 저장
             self.cache.cache_preprocessed_image(image, processed)
@@ -210,19 +240,55 @@ class OptimizedOCRService:
         return result
     
     def _perform_ocr_internal(self, image: np.ndarray) -> OptimizedOCRResult:
-        """실제 OCR 수행"""
+        """실제 OCR 수행 (안전성 강화)"""
         if not self.paddle_ocr:
             return OptimizedOCRResult()
         
         try:
+            # 이미지 유효성 검사
+            if image is None or image.size == 0:
+                return OptimizedOCRResult()
+            
+            # 최소 크기 확인
+            if len(image.shape) < 2 or min(image.shape[:2]) < 10:
+                return OptimizedOCRResult()
+            
             # 전처리
             processed = self.preprocess_image_optimized(image)
             
-            # OCR 실행
-            with suppress_stdout_stderr():
-                result = self.paddle_ocr.ocr(processed, cls=True)
+            # 전처리된 이미지 검증
+            if processed is None or processed.size == 0:
+                return OptimizedOCRResult()
             
-            if not result or not result[0]:
+            # OCR 실행 (메모리 안정성 강화)
+            with suppress_stdout_stderr():
+                # 이미지 데이터 타입 및 메모리 레이아웃 보장
+                if processed.dtype != np.uint8:
+                    processed = processed.astype(np.uint8)
+                
+                # 연속 메모리 배열로 변환
+                if not processed.flags['C_CONTIGUOUS']:
+                    processed = np.ascontiguousarray(processed)
+                
+                # 3채널로 변환 (PaddleOCR 요구사항)
+                if len(processed.shape) == 2:
+                    processed = cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+                elif len(processed.shape) == 3 and processed.shape[2] == 4:
+                    processed = cv2.cvtColor(processed, cv2.COLOR_BGRA2BGR)
+                
+                # 이미지 크기 검증 (최소 크기 보장)
+                h, w = processed.shape[:2]
+                if h < 16 or w < 16:
+                    # 너무 작은 이미지는 리사이즈
+                    processed = cv2.resize(processed, (max(32, w*2), max(32, h*2)))
+                
+                # 메모리 복사본 생성 (원본 데이터 보호)
+                processed_copy = processed.copy()
+                
+                result = self.paddle_ocr.ocr(processed_copy)
+            
+            # 결과 유효성 검사
+            if not result or len(result) == 0 or not result[0]:
                 return OptimizedOCRResult()
             
             # 텍스트 추출 및 보정
@@ -231,11 +297,11 @@ class OptimizedOCRService:
             count = 0
             
             for line in result[0]:
-                if line[1]:
-                    text = line[1][0]
-                    confidence = line[1][1]
+                if line and len(line) >= 2 and line[1]:
+                    text = line[1][0] if line[1][0] else ""
+                    confidence = float(line[1][1]) if line[1][1] else 0.0
                     
-                    if confidence > 0.5:
+                    if confidence > 0.3 and text.strip():  # 낮은 임계값
                         # OCR 보정 적용
                         is_trigger, corrected = self.ocr_corrector.check_trigger_pattern(text)
                         if is_trigger:
@@ -262,23 +328,69 @@ class OptimizedOCRService:
             return OptimizedOCRResult()
     
     def perform_batch_ocr(self, images_with_regions: List[Tuple[np.ndarray, Tuple[int, int, int, int]]]) -> List[OptimizedOCRResult]:
-        """배치 OCR 처리"""
+        """배치 OCR 처리 (안전성 강화)"""
+        if not images_with_regions:
+            return []
+        
         futures = []
+        valid_items = []
         
+        # 유효한 이미지만 필터링
         for image, region in images_with_regions:
-            future = self.executor.submit(self.perform_ocr_cached, image, region)
-            futures.append(future)
-        
-        results = []
-        for future in futures:
             try:
-                result = future.result(timeout=2.0)
-                results.append(result)
+                if image is not None and image.size > 0 and len(image.shape) >= 2:
+                    if min(image.shape[:2]) >= 10:  # 최소 크기 확인
+                        valid_items.append((image, region))
             except Exception as e:
-                self.logger.error(f"배치 OCR 오류: {e}")
+                self.logger.debug(f"이미지 유효성 검사 실패: {e}")
+        
+        if not valid_items:
+            return [OptimizedOCRResult() for _ in images_with_regions]
+        
+        # 이미지 크기 기준으로 정렬 (작은 이미지 먼저 처리)
+        try:
+            sorted_items = sorted(valid_items, 
+                                key=lambda x: x[0].shape[0] * x[0].shape[1])
+        except Exception:
+            sorted_items = valid_items
+        
+        # 스레드 풀에 작업 제출
+        for image, region in sorted_items:
+            try:
+                future = self.executor.submit(self.perform_ocr_cached, image, region)
+                futures.append((future, region))
+            except Exception as e:
+                self.logger.error(f"OCR 작업 제출 실패: {e}")
+                futures.append((None, region))
+        
+        # 결과 수집
+        results = []
+        completed_count = 0
+        timeout_per_item = 2.0  # 타임아웃 단축 (2초)
+        
+        for future, region in futures:
+            if future is None:
+                results.append(OptimizedOCRResult())
+                continue
+                
+            try:
+                result = future.result(timeout=timeout_per_item)
+                results.append(result if result else OptimizedOCRResult())
+                completed_count += 1
+            except Exception as e:
+                self.logger.debug(f"배치 OCR 실패 (region: {region}): {e}")
                 results.append(OptimizedOCRResult())
         
-        return results
+        # 원래 크기에 맞춰 결과 패딩
+        while len(results) < len(images_with_regions):
+            results.append(OptimizedOCRResult())
+        
+        if completed_count > 0:
+            avg_time = sum(r.processing_time_ms for r in results if r.processing_time_ms > 0) / completed_count
+            if avg_time > 500:  # 500ms 이상일 때만 로깅
+                self.logger.info(f"배치 OCR 평균 시간: {avg_time:.1f}ms")
+        
+        return results[:len(images_with_regions)]  # 정확한 크기로 반환
     
     def check_trigger_patterns(self, text: str) -> bool:
         """트리거 패턴 확인 (보정 포함)"""
@@ -308,18 +420,32 @@ class OptimizedOCRService:
         }
     
     def optimize_settings(self, performance_data: Dict[str, float]):
-        """성능 데이터 기반 설정 최적화"""
-        # CPU 사용률이 높으면 워커 수 감소
-        if performance_data.get('cpu_percent', 0) > 80:
-            new_workers = max(2, self.executor._max_workers - 1)
-            self.executor._max_workers = new_workers
-            self.logger.info(f"OCR 워커 수 감소: {new_workers}")
+        """성능 데이터 기반 설정 최적화 (워커 수 유지)"""
+        # 워커 수는 유지하고 다른 최적화 적용
+        current_workers = self.executor._max_workers
+        self.logger.info(f"현재 OCR 워커 수 유지: {current_workers}")
         
-        # 레이턴시가 높으면 전처리 간소화
-        if performance_data.get('avg_ocr_latency', 0) > 100:
+        # 레이턴시가 높으면 전처리 최적화
+        avg_latency = performance_data.get('avg_ocr_latency', 0)
+        if avg_latency > 100:
             # 간소화된 전처리 모드 활성화
             self.config._config['ocr_preprocess']['simple_mode'] = True
-            self.logger.info("간소화된 전처리 모드 활성화")
+            self.config._config['ocr_preprocess']['scale'] = 2.0  # 스케일 감소
+            self.config._config['ocr_preprocess']['gaussian_blur'] = False  # 블러 비활성화
+            self.config._config['ocr_preprocess']['apply_sharpen'] = False  # 샤프닝 비활성화
+            self.logger.info(f"OCR 전처리 최적화 적용 (레이턴시: {avg_latency:.1f}ms)")
+        elif avg_latency < 50:
+            # 레이턴시가 낮으면 품질 향상
+            self.config._config['ocr_preprocess']['scale'] = 3.0
+            self.config._config['ocr_preprocess']['gaussian_blur'] = True
+            self.config._config['ocr_preprocess']['apply_sharpen'] = True
+            self.logger.info(f"OCR 품질 향상 모드 (레이턴시: {avg_latency:.1f}ms)")
+        
+        # 캐시 히트율이 낮으면 캐시 크기 증가
+        cache_hit_rate = (self.cache_hit_count / self.total_ocr_count * 100) if self.total_ocr_count > 0 else 0
+        if cache_hit_rate < 30 and self.cache:
+            self.cache.increase_cache_size()
+            self.logger.info(f"캐시 크기 증가 (히트율: {cache_hit_rate:.1f}%)")
     
     def cleanup(self):
         """리소스 정리"""

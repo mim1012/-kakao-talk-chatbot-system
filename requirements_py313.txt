@@ -1,0 +1,30 @@
+# Python 3.13 호환 의존성 (기술 데모용)
+# 기존 requirements.txt와 별도로 관리
+
+# Core dependencies with Python 3.13 compatibility
+numpy==2.1.0
+opencv-python==4.10.0.84
+Pillow==10.4.0
+PyQt5==5.15.10
+mss==9.0.1
+
+# OCR dependencies - CPU only for stability
+paddlepaddle==3.0.0b1
+paddleocr==2.8.1
+
+# Testing framework
+pytest==8.3.2
+pytest-asyncio==0.23.8
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+
+# Performance monitoring
+psutil==6.0.0
+
+# Utility libraries
+screeninfo==0.8.1
+keyboard==0.13.5
+pyautogui==0.9.54
+
+# Optional GPU support (comment out if issues)
+# paddlepaddle-gpu==3.0.0b1

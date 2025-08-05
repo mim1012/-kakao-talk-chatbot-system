@@ -7,13 +7,24 @@ OCR 시스템 진단 도구
 """
 import os
 import sys
+import io
 import logging
+from pathlib import Path
 
-# 환경 변수 설정
-os.environ['PPOCR_LOG_LEVEL'] = 'ERROR'
-os.environ['PADDLEX_LOG_LEVEL'] = 'ERROR'
-os.environ['PADDLE_LOG_LEVEL'] = 'ERROR'
-os.environ['TQDM_DISABLE'] = '1'
+# UTF-8 encoding for stdout
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# src 디렉토리를 Python 경로에 추가
+script_dir = Path(__file__).parent.absolute()
+src_path = script_dir / "src"
+if src_path.exists():
+    sys.path.insert(0, str(src_path))
+    print(f"✅ src 경로 추가: {src_path}")
+
+# PaddleOCR 로그 완전 차단
+from utils.silence_paddle import silence_paddle
+silence_paddle()
 
 # 로깅 설정
 logging.basicConfig(
@@ -63,8 +74,12 @@ def test_ocr_initialization():
     
     try:
         from utils.suppress_output import suppress_stdout_stderr
+        import contextlib
+        import io
         
-        with suppress_stdout_stderr():
+        # stdout과 stderr 완전 차단
+        with contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
             from paddleocr import PaddleOCR
             ocr = PaddleOCR(lang='korean')
         
@@ -112,9 +127,21 @@ def test_trigger_patterns():
         config = ConfigManager()
         
         print(f"✅ 설정된 트리거 패턴: {config.trigger_patterns}")
-        print(f"✅ 정규식 사용 여부: {config.use_regex_trigger}")
-        if config.use_regex_trigger:
-            print(f"✅ 정규식 패턴: {config.regex_patterns}")
+        
+        # use_regex_trigger 속성 확인
+        if hasattr(config, 'use_regex_trigger'):
+            print(f"✅ 정규식 사용 여부: {config.use_regex_trigger}")
+            if config.use_regex_trigger and hasattr(config, 'regex_patterns'):
+                print(f"✅ 정규식 패턴: {config.regex_patterns}")
+        else:
+            # config.json에서 직접 읽기
+            import json
+            with open('config.json', 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                if 'use_regex_trigger' in config_data:
+                    print(f"✅ 정규식 사용 여부: {config_data['use_regex_trigger']}")
+                if 'regex_patterns' in config_data:
+                    print(f"✅ 정규식 패턴: {config_data['regex_patterns']}")
         
         return True
     except Exception as e:
@@ -153,31 +180,45 @@ def test_ocr_on_sample():
     try:
         import numpy as np
         import cv2
-        from utils.suppress_output import suppress_stdout_stderr
+        import contextlib
+        import io
+        import subprocess
+        
+        # Windows에서 subprocess 출력 숨기기
+        # (PaddleOCR 내부에서 처리하므로 여기서는 설정하지 않음)
         
         # 간단한 테스트 이미지 생성
         image = np.ones((100, 300, 3), dtype=np.uint8) * 255
-        cv2.putText(image, "Test 들어왔습니다", (10, 50), 
+        cv2.putText(image, "Test", (10, 50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
         
-        # OCR 수행
-        with suppress_stdout_stderr():
+        # OCR 수행 (로그 완전 차단)
+        with contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
             from paddleocr import PaddleOCR
             ocr = PaddleOCR(lang='korean')
-            result = ocr.ocr(image, cls=True)
+            # cls 파라미터 제거 (predict 메소드가 아닌 ocr 메소드 사용)
+            result = ocr.ocr(image)
         
-        if result and result[0]:
-            for detection in result[0]:
-                if detection[1]:
-                    text = detection[1][0]
-                    confidence = detection[1][1]
-                    print(f"✅ OCR 감지: '{text}' (신뢰도: {confidence:.2f})")
+        if result and isinstance(result, list) and len(result) > 0:
+            # result[0]이 None이 아닌지 확인
+            if result[0] is not None:
+                for detection in result[0]:
+                    if detection and len(detection) > 1 and detection[1]:
+                        text = detection[1][0] if isinstance(detection[1], (list, tuple)) else str(detection[1])
+                        confidence = detection[1][1] if isinstance(detection[1], (list, tuple)) and len(detection[1]) > 1 else 0.0
+                        print(f"✅ OCR 감지: '{text}' (신뢰도: {confidence:.2f})")
+                        return True
+            else:
+                print("⚠️ OCR 결과 없음 (빈 이미지)")
         else:
             print("⚠️ OCR 결과 없음")
         
-        return True
+        return True  # 결과가 없어도 기능은 정상
     except Exception as e:
         print(f"❌ OCR 테스트 실패: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def main():

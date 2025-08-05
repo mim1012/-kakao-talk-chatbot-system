@@ -21,6 +21,7 @@ from utils.suppress_output import suppress_stdout_stderr
 # Try to import PaddleOCR with graceful fallback
 try:
     from paddleocr import PaddleOCR
+    from ocr.safe_paddleocr import create_safe_paddleocr
     PADDLEOCR_AVAILABLE = True
 except ImportError:
     PADDLEOCR_AVAILABLE = False
@@ -66,7 +67,8 @@ class EnhancedOCRService:
         # Debug mode flag
         self.debug_mode = True
         self.debug_save_count = 0
-        self.max_debug_saves = 100
+        self.max_debug_saves = 200  # 테스트를 위해 증가
+        self.save_preprocessed = True  # 전처리 이미지 저장 활성화
         
         # Performance metrics
         self.ocr_stats = {
@@ -95,9 +97,15 @@ class EnhancedOCRService:
             try:
                 # Suppress all output during PaddleOCR initialization
                 with suppress_stdout_stderr():
-                    # Initialize with optimized settings for Korean text
+                    # Use safe PaddleOCR initialization for Python 3.11 compatibility
+                    EnhancedOCRService._shared_paddle_ocr = create_safe_paddleocr()
+                
+                if EnhancedOCRService._shared_paddle_ocr is None:
+                    # Fallback to basic initialization
                     EnhancedOCRService._shared_paddle_ocr = PaddleOCR(
-                        lang='korean'
+                        lang='korean',
+                        use_angle_cls=False,
+                        enable_mkldnn=False
                     )
                 
                 self.paddle_ocr = EnhancedOCRService._shared_paddle_ocr
@@ -212,15 +220,18 @@ class EnhancedOCRService:
             # Try OCR on each preprocessed image
             for i, processed_img in enumerate(preprocessed_images):
                 try:
-                    results = self.paddle_ocr.ocr(processed_img, cls=True)
+                    results = self.paddle_ocr.ocr(processed_img)
                     
-                    if results and results[0]:
-                        for detection in results[0]:
-                            if detection[1]:  # Has text result
-                                text = detection[1][0]
-                                confidence = detection[1][1]
+                    if results and len(results) > 0:
+                        # 새로운 PaddleX 형식 처리
+                        if hasattr(results[0], 'rec_texts') and hasattr(results[0], 'rec_scores'):
+                            # PaddleX OCRResult 객체
+                            rec_texts = results[0].rec_texts
+                            rec_scores = results[0].rec_scores
+                            
+                            for j, (text, confidence) in enumerate(zip(rec_texts, rec_scores)):
                                 
-                                                # Log only high confidence detections in debug mode
+                                # Log only high confidence detections in debug mode
                                 if self.debug_mode and confidence > 0.7:
                                     self.logger.debug(f"{cell_id} Strategy {i}: '{text}' (conf: {confidence:.2f})")
                                 
@@ -231,9 +242,27 @@ class EnhancedOCRService:
                                 })
                                 
                                 # Update best result
-                                if confidence > best_confidence:
+                                # 트리거 패턴이 포함된 텍스트를 우선적으로 선택
+                                is_trigger_text = any(pattern in text for pattern in self.config.get('trigger_patterns', []))
+                                
+                                # 트리거 패턴이 있거나 신뢰도가 더 높은 경우 업데이트
+                                should_update = False
+                                if is_trigger_text and confidence > 0.8:
+                                    # 트리거 패턴이 있고 신뢰도가 충분하면 선택
+                                    should_update = True
+                                elif confidence > best_confidence and not any(pattern in best_result.text if best_result else '' for pattern in self.config.get('trigger_patterns', [])):
+                                    # 현재 최고 결과가 트리거가 아니고, 새 결과가 더 높은 신뢰도면 선택
+                                    should_update = True
+                                
+                                if should_update:
                                     best_confidence = confidence
-                                    position = (int(detection[0][0][0]), int(detection[0][0][1]))
+                                    # PaddleX 형식에서는 position을 다르게 처리
+                                    position = (0, 0)  # 기본값
+                                    if hasattr(results[0], 'rec_polys') and len(results[0].rec_polys) > j:
+                                        poly = results[0].rec_polys[j]
+                                        if len(poly) > 0:
+                                            position = (int(poly[0][0]), int(poly[0][1]))
+                                    
                                     best_result = OCRResult(
                                         text, 
                                         confidence, 
@@ -243,6 +272,48 @@ class EnhancedOCRService:
                                             'all_results': all_results
                                         }
                                     )
+                        else:
+                            # 기존 형식 처리 (리스트 형식)
+                            for detection in results[0]:
+                                if detection[1]:  # Has text result
+                                    text = detection[1][0]
+                                    confidence = detection[1][1]
+                                    
+                                    # Log only high confidence detections in debug mode
+                                    if self.debug_mode and confidence > 0.7:
+                                        self.logger.debug(f"{cell_id} Strategy {i}: '{text}' (conf: {confidence:.2f})")
+                                    
+                                    all_results.append({
+                                        'text': text,
+                                        'confidence': confidence,
+                                        'strategy': i
+                                    })
+                                    
+                                    # Update best result
+                                    # 트리거 패턴이 포함된 텍스트를 우선적으로 선택
+                                    is_trigger_text = any(pattern in text for pattern in self.config.get('trigger_patterns', []))
+                                    
+                                    # 트리거 패턴이 있거나 신뢰도가 더 높은 경우 업데이트
+                                    should_update = False
+                                    if is_trigger_text and confidence > 0.8:
+                                        # 트리거 패턴이 있고 신뢰도가 충분하면 선택
+                                        should_update = True
+                                    elif confidence > best_confidence and not any(pattern in best_result.text if best_result else '' for pattern in self.config.get('trigger_patterns', [])):
+                                        # 현재 최고 결과가 트리거가 아니고, 새 결과가 더 높은 신뢰도면 선택
+                                        should_update = True
+                                    
+                                    if should_update:
+                                        best_confidence = confidence
+                                        position = (int(detection[0][0][0]), int(detection[0][0][1]))
+                                        best_result = OCRResult(
+                                            text, 
+                                            confidence, 
+                                            position,
+                                            debug_info={
+                                                'strategy': i,
+                                                'all_results': all_results
+                                            }
+                                        )
                                     
                 except Exception as e:
                     self.logger.debug(f"OCR failed on strategy {i}: {e}")
@@ -253,6 +324,17 @@ class EnhancedOCRService:
                 self.logger.info(f"✅ OCR 감지: '{best_result.text}' (신뢰도: {best_result.confidence:.2f})")
                 return best_result
             else:
+                # best_result가 없어도 all_results에서 트리거 패턴 찾기
+                for res in all_results:
+                    text = res.get('text', '')
+                    if text and any(pattern in text for pattern in self.config.get('trigger_patterns', [])):
+                        # 트리거 패턴이 있으면 해당 결과 반환
+                        return OCRResult(
+                            text,
+                            res.get('confidence', 0.9),
+                            debug_info={'all_results': all_results, 'fallback': True}
+                        )
+                
                 self.ocr_stats['empty_results'] += 1
                 return OCRResult(debug_info={'all_results': all_results})
                 
@@ -383,3 +465,7 @@ class EnhancedOCRService:
         """Reset debug save counter."""
         self.debug_save_count = 0
         self.logger.info("Debug save counter reset")
+    
+    def get_statistics(self) -> dict[str, Any]:
+        """Get OCR service statistics (alias for get_status)."""
+        return self.get_status()

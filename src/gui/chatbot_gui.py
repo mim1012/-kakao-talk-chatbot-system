@@ -21,6 +21,66 @@ import numpy as np
 import mss
 import pyautogui
 import pyperclip
+
+# PyAutoGUI 설정
+pyautogui.FAILSAFE = True  # 안전 모드 활성화
+pyautogui.PAUSE = 0.1      # 각 동작 사이 0.1초 대기
+
+# 원격 데스크톱 감지
+def is_remote_session():
+    """원격 데스크톱 세션인지 확인"""
+    try:
+        import os
+        # 환경 변수 확인
+        if os.environ.get('SESSIONNAME', '').startswith('RDP-'):
+            return True
+        # AnyDesk, TeamViewer 등 확인
+        import psutil
+        for proc in psutil.process_iter(['name']):
+            pname = proc.info['name'].lower()
+            if any(remote in pname for remote in ['anydesk', 'teamviewer', 'rustdesk', 'rdpclip']):
+                return True
+    except:
+        pass
+    return False
+
+# Win32 자동화 모듈 import
+IS_REMOTE = is_remote_session()
+if IS_REMOTE:
+    print("🌐 원격 데스크톱 환경 감지됨!")
+    
+# 원격 환경이면 특별 처리
+if IS_REMOTE:
+    try:
+        from src.utils.remote_automation import automation as win32_auto
+        WIN32_AVAILABLE = True
+        print("✅ 원격 데스크톱 자동화 모듈 로드됨")
+    except ImportError:
+        win32_auto = None
+        WIN32_AVAILABLE = False
+        print("⚠️ 원격 자동화 모듈 로드 실패")
+else:
+    try:
+        # 먼저 SendInput API 시도 (가장 신뢰할 수 있음)
+        from src.utils.sendinput_automation import automation as win32_auto
+        WIN32_AVAILABLE = True
+        print("✅ SendInput 자동화 모듈 로드됨")
+    except ImportError:
+        try:
+            # 다음으로 direct_win32 시도 (ctypes만 사용)
+            from src.utils.direct_win32 import automation as win32_auto
+            WIN32_AVAILABLE = True
+            print("✅ Direct Win32 자동화 모듈 로드됨")
+        except ImportError:
+            try:
+                # 마지막으로 pywin32 기반 모듈 시도
+                from src.utils.win32_automation import automation as win32_auto
+                WIN32_AVAILABLE = True
+                print("✅ PyWin32 자동화 모듈 로드됨")
+            except ImportError:
+                win32_auto = None
+                WIN32_AVAILABLE = False
+                print("⚠️ Win32 자동화 모듈을 불러올 수 없습니다")
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -34,8 +94,23 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                             QLabel, QPushButton, QTextEdit, QSpinBox, QCheckBox, 
                             QGroupBox, QGridLayout, QScrollArea, QDoubleSpinBox,
                             QSlider, QComboBox, QTabWidget)
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QRect
-from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QRect, QMetaType
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QTextCursor
+
+# QTextCursor를 메타타입으로 등록 (스레드 간 통신을 위해)
+try:
+    # PyQt5에서는 대부분 자동으로 메타타입이 등록됨
+    # 수동 등록이 필요한 경우를 위한 안전한 처리
+    from PyQt5.QtCore import QMetaType
+    # QTextCursor 타입이 이미 등록되어 있는지 확인
+    cursor_type_id = QMetaType.type('QTextCursor')
+    if cursor_type_id == 0:  # 등록되지 않은 경우
+        # PyQt5는 대부분 자동으로 처리하므로 추가 작업 불필요
+        pass
+except Exception:
+    # 메타타입 등록 관련 오류는 무시 (PyQt5가 자동 처리)
+    pass
+
 from screeninfo import get_monitors
 
 # 서비스 임포트
@@ -43,7 +118,7 @@ from core.service_container import ServiceContainer, MonitoringOrchestrator
 from core.grid_manager import GridCell, CellStatus
 from core.cache_manager import CacheManager
 from monitoring.performance_monitor import PerformanceMonitor, PerformanceOptimizer
-from ocr.optimized_ocr_service import OptimizedOCRService
+from ocr.enhanced_ocr_service import EnhancedOCRService
 from utils.suppress_output import suppress_stdout_stderr
 
 # PaddleOCR
@@ -64,20 +139,34 @@ class DetectionResult:
     timestamp: float
 
 class HighPerformanceOCREngine:
-    """고성능 OCR 엔진 - 병렬 처리 최적화 (Deprecated - OptimizedOCRService 사용)"""
+    """고성능 OCR 엔진 - 병렬 처리 최적화"""
     
     def __init__(self, config, cache_manager=None, perf_monitor=None):
         self.config = config
         self.cache = cache_manager
         self.perf_monitor = perf_monitor
-        # OptimizedOCRService로 대체
-        self.ocr_service = OptimizedOCRService(config, cache_manager, perf_monitor)
-        self.executor = self.ocr_service.executor
+        
+        # ConfigManager 객체 생성 (dict를 ConfigManager로 변환)
+        from core.config_manager import ConfigManager
+        if isinstance(config, dict):
+            config_manager = ConfigManager()
+            config_manager._config = config
+        else:
+            config_manager = config
+            
+        # EnhancedOCRService 사용
+        self.ocr_service = EnhancedOCRService(config_manager)
+        
+        # ThreadPoolExecutor 생성 (기본값 사용)
+        from concurrent.futures import ThreadPoolExecutor
+        self.max_workers = getattr(config_manager, 'ocr_max_workers', 6)
+        self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
     
     def _init_paddle_ocr(self):
         """PaddleOCR 초기화"""
         try:
             with suppress_stdout_stderr():
+                # PaddleOCR 3.1.0 호환 - 최소 파라미터만 사용
                 self.paddle_ocr = PaddleOCR(lang='korean')
             print("🚀 고성능 PaddleOCR 엔진 초기화 완료")
         except Exception as e:
@@ -110,7 +199,7 @@ class HighPerformanceOCREngine:
             return image
     
     def perform_ocr_batch(self, images_with_cells: list) -> list:
-        """배치 OCR 처리 (OptimizedOCRService로 위임)"""
+        """배치 OCR 처리"""
         # 새로운 형식으로 변환
         images_with_regions = []
         cells = []
@@ -118,7 +207,7 @@ class HighPerformanceOCREngine:
         for image, cell in images_with_cells:
             region = (cell.ocr_area[0], cell.ocr_area[1], 
                      cell.ocr_area[2], cell.ocr_area[3])
-            images_with_regions.append((image, region))
+            images_with_regions.append((image, region, cell.id))
             cells.append(cell)
         
         # 최적화된 서비스 사용
@@ -146,9 +235,9 @@ class HighPerformanceOCREngine:
             # 전처리
             processed = self.preprocess_image_fast(image)
             
-            # OCR 수행
+            # OCR 수행 (3.1.0 호환)
             with suppress_stdout_stderr():
-                result = self.paddle_ocr.ocr(processed, cls=True)
+                result = self.paddle_ocr.ocr(processed)
             
             if not result or not result[0]:
                 return None
@@ -180,10 +269,30 @@ class HighPerformanceOCREngine:
             print(f"OCR 처리 중 오류: {e}")
             return None
     
+    def perform_batch_ocr(self, images_with_regions: List[Tuple[np.ndarray, Tuple[int, int, int, int], str]]) -> List[Any]:
+        """배치 OCR 처리"""
+        results = []
+        
+        # 개별 처리로 변경 (EnhancedOCRService 사용)
+        for image, region, cell_id in images_with_regions:
+            try:
+                result = self.ocr_service.perform_ocr_with_recovery(image, cell_id)
+                results.append(result)
+            except Exception as e:
+                print(f"OCR 처리 오류 ({cell_id}): {e}")
+                results.append(None)
+        
+        return results
+    
     def _check_trigger_patterns(self, text: str) -> bool:
         """트리거 패턴 확인"""
         trigger_patterns = ["들어왔습니다", "입장했습니다", "참여했습니다"]
         return any(pattern in text for pattern in trigger_patterns)
+    
+    def cleanup(self):
+        """리소스 정리"""
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=True)
 
 class RealTimeMonitoringThread(QThread):
     """실시간 모니터링 스레드"""
@@ -205,10 +314,14 @@ class RealTimeMonitoringThread(QThread):
             perf_monitor
         )
         self.automation_queue = queue.Queue()
+        self._debug_samples_saved = False
+        self.test_mode = False
+        self.test_cell_id = None
         
         # 자동화 처리 스레드
         self.automation_thread = threading.Thread(target=self._automation_worker, daemon=True)
         self.automation_thread.start()
+        print("🤖 자동화 스레드 생성 및 시작")
     
     def run(self):
         """메인 감지 루프"""
@@ -223,8 +336,16 @@ class RealTimeMonitoringThread(QThread):
                     
                     # 활성 셀 가져오기
                     self.services.grid_manager.update_cell_cooldowns()
-                    active_cells = [cell for cell in self.services.grid_manager.cells 
-                                  if cell.can_be_triggered()]
+                    
+                    # 테스트 모드에서는 선택한 셀만 활성화
+                    if self.test_mode and self.test_cell_id:
+                        active_cells = [cell for cell in self.services.grid_manager.cells 
+                                      if cell.can_be_triggered() and cell.id == self.test_cell_id]
+                        if active_cells:
+                            print(f"🧪 테스트 모드: {self.test_cell_id}만 감지 중...")
+                    else:
+                        active_cells = [cell for cell in self.services.grid_manager.cells 
+                                      if cell.can_be_triggered()]
                     
                     if not active_cells:
                         time.sleep(0.1)
@@ -244,47 +365,148 @@ class RealTimeMonitoringThread(QThread):
                     images_with_regions = []
                     capture_start = time.time()
                     
+                    print(f"📸 {len(active_cells[:batch_size])}개 셀 스크린샷 캡처 시작...")
+                    
                     for cell in active_cells[:batch_size]:
                         try:
+                            x, y, w, h = cell.ocr_area
+                            print(f"   📱 셀 {cell.id}: 영역 ({x}, {y}, {w}, {h})")
+                            
                             ocr_area = {
-                                'left': cell.ocr_area[0],
-                                'top': cell.ocr_area[1], 
-                                'width': cell.ocr_area[2],
-                                'height': cell.ocr_area[3]
+                                'left': x,
+                                'top': y, 
+                                'width': w,
+                                'height': h
                             }
                             screenshot = sct.grab(ocr_area)
                             image = np.array(screenshot)
-                            region = (cell.ocr_area[0], cell.ocr_area[1], 
-                                    cell.ocr_area[2], cell.ocr_area[3])
-                            images_with_regions.append((image, region))
+                            region = (x, y, w, h)
+                            images_with_regions.append((image, region, cell.id))
+                            
+                            print(f"   ✅ 셀 {cell.id}: 캡처 완료 ({image.shape})")
+                            
+                            # 테스트 모드에서는 항상 스크린샷 저장
+                            save_debug = self.test_mode or not hasattr(self, '_debug_samples_saved')
+                            
+                            if save_debug:
+                                import os
+                                from datetime import datetime
+                                from PIL import Image as PILImage
+                                
+                                debug_dir = "screenshots/debug"
+                                os.makedirs(debug_dir, exist_ok=True)
+                                
+                                timestamp = datetime.now().strftime("%H%M%S")
+                                prefix = "TEST_" if self.test_mode else "sample_"
+                                filename = f"{debug_dir}/{prefix}{cell.id}_{timestamp}.png"
+                                
+                                # BGRA를 RGB로 변환하여 저장
+                                rgb_image = image[:, :, :3]  # 알파 채널 제거
+                                pil_image = PILImage.fromarray(rgb_image)
+                                pil_image.save(filename)
+                                
+                                print(f"      📁 {'테스트' if self.test_mode else '샘플'} 저장: {filename}")
+                                
+                                # 이미지 정보 출력
+                                if self.test_mode:
+                                    print(f"      📊 이미지 크기: {image.shape}, 평균값: {image.mean():.1f}")
+                                    self.status_signal.emit(f"테스트 스크린샷 저장: {filename}")
+                                
+                                # 처음 몇 개만 저장 후 플래그 설정
+                                if not self.test_mode and len(images_with_regions) >= 3:
+                                    self._debug_samples_saved = True
+                            
                         except Exception as e:
-                            print(f"스크린샷 오류 {cell.id}: {e}")
+                            print(f"   ❌ 스크린샷 오류 {cell.id}: {e}")
+                    
+                    print(f"📸 캡처 완료: {len(images_with_regions)}개 이미지")
                     
                     # 스크린 캡처 시간 기록
                     if self.perf_monitor:
                         capture_time = (time.time() - capture_start) * 1000
                         self.perf_monitor.record_capture_latency(capture_time)
                     
-                    # 배치 OCR 처리 (최적화된 서비스 사용)
-                    results = self.ocr_engine.ocr_service.perform_batch_ocr(images_with_regions)
+                    # 배치 OCR 처리 (개별 처리로 변경)
+                    ocr_results = []
+                    for image, region, cell_id in images_with_regions:
+                        try:
+                            # EnhancedOCRService의 perform_ocr_with_recovery 사용
+                            result = self.ocr_engine.ocr_service.perform_ocr_with_recovery(image, cell_id)
+                            ocr_results.append(result)
+                        except Exception as e:
+                            print(f"OCR 처리 오류 ({cell_id}): {e}")
+                            ocr_results.append(None)
                     
-                    # 결과와 셀 매핑
-                    for i, result in enumerate(results):
-                        if i < len(active_cells) and result.text:
+                    # 감지된 결과 리스트
+                    detection_results = []
+                    
+                    # 결과와 셀 매핑 (강화된 콘솔 디버깅)
+                    try:
+                        print(f"\n=== OCR 스캔 결과 ===")
+                        print(f"📊 OCR 결과: {len(ocr_results)}, 활성 셀: {len(active_cells)}")
+                        
+                        # 테스트 모드 상태 출력
+                        if self.test_mode:
+                            print(f"🧪 테스트 모드 활성 - 대상 셀: {self.test_cell_id}")
+                        
+                        # 안전한 인덱스 처리
+                        min_len = min(len(ocr_results), len(active_cells))
+                        
+                        for i in range(min_len):
+                            ocr_result = ocr_results[i]
                             cell = active_cells[i]
-                            # 트리거 패턴 확인
-                            if self.ocr_engine.ocr_service.check_trigger_patterns(result.text):
-                                detection_result = DetectionResult(
-                                    cell=cell,
-                                    text=result.text,
-                                    confidence=result.confidence,
-                                    position=result.position,
-                                    timestamp=result.timestamp
-                                )
-                                results.append(detection_result)
+                            
+                            # 모든 OCR 결과를 콘솔에 출력
+                            if ocr_result:
+                                if ocr_result.text:
+                                    print(f"🔍 셀 {cell.id}: '{ocr_result.text}' (신뢰도: {ocr_result.confidence:.2f})")
+                                    
+                                    # 디버그 정보 출력
+                                    if self.test_mode and hasattr(ocr_result, 'debug_info'):
+                                        debug_info = ocr_result.debug_info
+                                        if 'all_results' in debug_info:
+                                            print(f"   📝 전체 감지 결과 ({len(debug_info['all_results'])}개):")
+                                            for j, res in enumerate(debug_info['all_results'][:3]):  # 처음 3개만
+                                                print(f"      [{j}] '{res.get('text', '')}' (신뢰도: {res.get('confidence', 0):.2f})")
+                                    
+                                    # 트리거 패턴 확인
+                                    if self.ocr_engine.ocr_service.check_trigger_patterns(ocr_result):
+                                        detection_result = DetectionResult(
+                                            cell=cell,
+                                            text=ocr_result.text,
+                                            confidence=ocr_result.confidence,
+                                            position=ocr_result.position,
+                                            timestamp=time.time()
+                                        )
+                                        detection_results.append(detection_result)
+                                        print(f"🎯🎯🎯 감지! 셀 {cell.id}: '{ocr_result.text}'")
+                                        self.status_signal.emit(f"🎯 감지: {ocr_result.text}")
+                                        
+                                        # 테스트 모드에서는 GUI 로그에도 표시
+                                        if self.test_mode:
+                                            self.status_signal.emit(f"테스트 모드 감지: {cell.id} - '{ocr_result.text}'")
+                                    else:
+                                        print(f"❌ 트리거 매칭 실패: '{ocr_result.text}'")
+                                        
+                                        # 테스트 모드에서는 왜 매칭 실패했는지 상세 정보 표시
+                                        if self.test_mode:
+                                            print(f"   📌 원본 텍스트: '{ocr_result.text}'")
+                                            print(f"   📌 정규화 텍스트: '{ocr_result.normalized_text}'")
+                                else:
+                                    print(f"⭕ 셀 {cell.id}: 텍스트 없음")
+                                    if self.test_mode and hasattr(ocr_result, 'debug_info'):
+                                        print(f"   ℹ️ 디버그: {ocr_result.debug_info}")
+                            else:
+                                print(f"❌ 셀 {cell.id}: OCR 결과 없음 (None)")
+                        
+                        print(f"=== 스캔 완료 ===\n")
+                                
+                    except Exception as debug_e:
+                        print(f"디버깅 오류: {debug_e}")
+                        self.status_signal.emit(f"디버깅 오류: {debug_e}")
                     
                     # 결과 처리
-                    for result in results:
+                    for result in detection_results:
                         cell = result.cell
                         cell.set_triggered(result.text, result.position)
                         
@@ -298,6 +520,7 @@ class RealTimeMonitoringThread(QThread):
                         
                         # 자동화 큐에 추가
                         self.automation_queue.put(result)
+                        print(f"🤖 자동화 큐에 추가: {result.cell.id} - '{result.text}'")
                     
                     # 주기 조절
                     elapsed = time.time() - start_time
@@ -305,15 +528,28 @@ class RealTimeMonitoringThread(QThread):
                         time.sleep(0.5 - elapsed)
                         
                 except Exception as e:
-                    print(f"모니터링 오류: {e}")
-                    self.status_signal.emit(f"❌ 오류: {str(e)}")
-                    time.sleep(1)
+                    error_msg = f"모니터링 오류: {str(e)[:100]}"
+                    self.status_signal.emit(f"❌ {error_msg}")
+                    time.sleep(2)  # 오류 시 더 긴 대기
     
     def _automation_worker(self):
         """자동화 처리 워커"""
+        print("🤖 자동화 워커 시작됨")
+        queue_check_count = 0
         while True:
             try:
+                # 큐 상태 확인 (10번마다 한 번씩)
+                queue_check_count += 1
+                if queue_check_count % 10 == 0:
+                    print(f"   🔍 큐 체크 중... (큐 크기: {self.automation_queue.qsize()})")
+                
                 result = self.automation_queue.get(timeout=1)
+                print(f"🤖 자동화 실행 시작: {result.cell.id} - '{result.text}'")
+                print(f"   📊 DetectionResult 정보:")
+                print(f"      - cell: {result.cell.id}")
+                print(f"      - text: '{result.text}'")
+                print(f"      - position: {result.position}")
+                print(f"      - confidence: {result.confidence}")
                 
                 # 자동화 실행
                 success = self._execute_automation(result)
@@ -321,37 +557,132 @@ class RealTimeMonitoringThread(QThread):
                 # 결과 신호
                 status = "✅ 성공" if success else "❌ 실패"
                 self.automation_signal.emit(result.cell.id, status)
+                print(f"🤖 자동화 완료: {status}")
                 
             except queue.Empty:
                 continue
             except Exception as e:
                 print(f"자동화 오류: {e}")
+                import traceback
+                traceback.print_exc()
     
     def _execute_automation(self, result: DetectionResult) -> bool:
         """자동화 실행"""
+        # 디버그 로그 파일에 기록
+        with open("automation_debug.log", "a", encoding="utf-8") as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"자동화 실행 시작: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Cell: {result.cell.id}, Text: '{result.text}'\n")
+            
         try:
             cell = result.cell
-            x, y = cell.detected_text_position
+            
+            # 메시지 입력창 위치 계산
+            # 셀의 하단에서 위로 8px 위치를 클릭
+            ocr_x, ocr_y, ocr_width, ocr_height = cell.ocr_area
+            
+            # x 좌표는 셀의 중앙
+            click_x = ocr_x + ocr_width // 2
+            
+            # y 좌표는 셀의 하단에서 위로 설정된 픽셀만큼
+            input_offset = self.services.config_manager.get('input_box_offset', {}).get('from_bottom', 8)
+            click_y = ocr_y + ocr_height - input_offset
+            
+            # 로그 파일에 기록
+            with open("automation_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"셀 영역: ({ocr_x}, {ocr_y}, {ocr_width}, {ocr_height})\n")
+                f.write(f"클릭 위치: ({click_x}, {click_y}) - 셀 하단에서 {input_offset}px 위\n")
+                f.write(f"PyAutoGUI FAILSAFE: {pyautogui.FAILSAFE}\n")
+                
+            print(f"   📍 셀 영역: ({ocr_x}, {ocr_y}, {ocr_width}, {ocr_height})")
+            print(f"   📍 클릭 위치: ({click_x}, {click_y}) - 셀 하단에서 {input_offset}px 위")
+            
+            # pyautogui 안전 모드 확인
+            print(f"   🔧 PyAutoGUI FAILSAFE: {pyautogui.FAILSAFE}")
+            print(f"   🔧 Win32 API 사용 가능: {WIN32_AVAILABLE}")
             
             # 입력창 클릭
-            pyautogui.click(x, y + 100)
+            print(f"   🖱️ 클릭 실행 전...")
+            with open("automation_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"클릭 실행 전... 시간: {time.strftime('%H:%M:%S')}\n")
+                if WIN32_AVAILABLE:
+                    before_x, before_y = win32_auto.get_cursor_pos()
+                    f.write(f"현재 마우스 위치 (Win32): ({before_x}, {before_y})\n")
+                else:
+                    f.write(f"현재 마우스 위치 (PyAutoGUI): {pyautogui.position()}\n")
+            
+            # 스크린샷 저장 (디버깅용)
+            screenshot = pyautogui.screenshot()
+            screenshot.save(f"automation_before_click_{time.strftime('%H%M%S')}.png")
+            
+            # 마우스 이동 후 클릭
+            if WIN32_AVAILABLE:
+                print(f"   ➡️ Win32 API로 마우스 이동: ({click_x}, {click_y})")
+                win32_auto.set_cursor_pos(click_x, click_y)
+                time.sleep(0.5)  # 이동 후 대기
+                win32_auto.mouse_click()
+            else:
+                print(f"   ➡️ PyAutoGUI로 마우스 이동: ({click_x}, {click_y})")
+                pyautogui.moveTo(click_x, click_y, duration=0.5)
+                time.sleep(0.1)
+                pyautogui.click(click_x, click_y)
+            
+            with open("automation_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"클릭 완료! 시간: {time.strftime('%H:%M:%S')}\n")
+                if WIN32_AVAILABLE:
+                    after_x, after_y = win32_auto.get_cursor_pos()
+                    f.write(f"클릭 후 마우스 위치 (Win32): ({after_x}, {after_y})\n")
+                else:
+                    f.write(f"클릭 후 마우스 위치 (PyAutoGUI): {pyautogui.position()}\n")
+            print(f"   🖱️ 클릭 완료")
             time.sleep(0.2)
             
-            # 텍스트 입력
-            pyperclip.copy("어서오세요! 환영합니다 😊")
-            pyautogui.hotkey('ctrl', 'v')
+            # 입력창 활성화 확인을 위해 한번 더 클릭 (더블클릭 효과)
+            if WIN32_AVAILABLE:
+                win32_auto.mouse_click()
+            else:
+                pyautogui.click(click_x, click_y)
             time.sleep(0.1)
             
-            # 전송
-            pyautogui.press('enter')
+            # 텍스트 입력
+            response = "어서오세요! 환영합니다 😊"
+            print(f"   📝 응답 입력: '{response}'")
+            pyperclip.copy(response)
+            
+            # 텍스트 전송
+            if WIN32_AVAILABLE:
+                print(f"   📨 Win32 API로 텍스트 전송")
+                win32_auto.send_keys(response)
+                time.sleep(0.5)
+                win32_auto.send_enter()
+            else:
+                print(f"   📨 PyAutoGUI로 텍스트 전송")
+                # 붙여넣기
+                pyautogui.hotkey('ctrl', 'v')
+                time.sleep(0.1)
+                # 전송
+                pyautogui.press('enter')
+            print(f"   ✉️ 메시지 전송 완료")
             
             # 쿨다운 설정
             cell.set_cooldown(5.0)
+            print(f"   ⏱️ 쿨다운 설정: 5초")
+            
+            with open("automation_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"자동화 성공! 시간: {time.strftime('%H:%M:%S')}\n")
+                f.write(f"{'='*60}\n")
             
             return True
             
         except Exception as e:
             print(f"자동화 실행 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            with open("automation_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"자동화 실패! 오류: {e}\n")
+                f.write(f"{'='*60}\n")
+            
             return False
     
     def stop(self):
@@ -386,36 +717,44 @@ class GridOverlayWidget(QWidget):
         self.animation_timer.start(100)
     
     def paintEvent(self, event):
-        """그리기 이벤트"""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # 그리드 그리기
-        grid_pen = QPen(self.grid_color, self.grid_line_width)
-        painter.setPen(grid_pen)
-        
-        for cell in self.grid_manager.cells:
-            x, y, w, h = cell.bounds
+        """그리기 이벤트 (안전한 처리)"""
+        try:
+            painter = QPainter(self)
+            if not painter.isActive():
+                return
             
-            # 셀 테두리
-            painter.drawRect(x, y, w, h)
+            painter.setRenderHint(QPainter.Antialiasing)
             
-            # 셀 상태에 따른 색상
-            if cell.status == CellStatus.TRIGGERED:
-                painter.fillRect(x, y, w, h, QBrush(self.active_color))
-            elif cell.status == CellStatus.COOLDOWN:
-                painter.fillRect(x, y, w, h, QBrush(self.cooldown_color))
+            # 그리드 그리기
+            grid_pen = QPen(self.grid_color, self.grid_line_width)
+            painter.setPen(grid_pen)
             
-            # OCR 영역 표시
-            ocr_x, ocr_y, ocr_w, ocr_h = cell.ocr_area
-            ocr_pen = QPen(QColor(255, 255, 0, 150), 2, Qt.DashLine)
-            painter.setPen(ocr_pen)
-            painter.drawRect(ocr_x, ocr_y, ocr_w, ocr_h)
-            
-            # 셀 ID 표시
-            painter.setPen(QPen(Qt.white))
-            painter.setFont(QFont("Arial", 10))
-            painter.drawText(x + 5, y + 15, cell.id)
+            for cell in self.grid_manager.cells:
+                x, y, w, h = cell.bounds
+                
+                # 셀 테두리
+                painter.drawRect(x, y, w, h)
+                
+                # 셀 상태에 따른 색상
+                if cell.status == CellStatus.TRIGGERED:
+                    painter.fillRect(x, y, w, h, QBrush(self.active_color))
+                elif cell.status == CellStatus.COOLDOWN:
+                    painter.fillRect(x, y, w, h, QBrush(self.cooldown_color))
+                
+                # OCR 영역 표시
+                ocr_x, ocr_y, ocr_w, ocr_h = cell.ocr_area
+                ocr_pen = QPen(QColor(255, 255, 0, 150), 2, Qt.DashLine)
+                painter.setPen(ocr_pen)
+                painter.drawRect(ocr_x, ocr_y, ocr_w, ocr_h)
+                
+                # 셀 ID 표시
+                painter.setPen(QPen(Qt.white))
+                painter.setFont(QFont("Arial", 10))
+                painter.drawText(x + 5, y + 15, cell.id)
+                
+        except Exception as e:
+            # QPainter 오류 무시 (로그만 남김)
+            pass
 
 class UnifiedChatbotGUI(QWidget):
     """통합 챗봇 GUI - 모든 기능 포함"""
@@ -429,16 +768,25 @@ class UnifiedChatbotGUI(QWidget):
         self.perf_monitor = PerformanceMonitor()
         self.perf_optimizer = PerformanceOptimizer(self.perf_monitor)
         
-        # 캐시와 모니터 시작
-        self.cache_manager.start()
-        self.perf_monitor.start()
-        
-        # 성능 콜백 등록
-        self.perf_monitor.add_callback(self.on_performance_update)
+        # UI 요소 초기화 (콜백 전에 초기화)
+        self.cpu_label = None
+        self.memory_label = None
+        self.ocr_latency_label = None
+        self.cache_hit_label = None
         
         self.monitoring_thread = None
         self.overlay = None
+        
+        # UI 초기화 먼저
         self.init_ui()
+        
+        # 캐시와 모니터 시작 (UI 초기화 후)
+        self.cache_manager.start()
+        self.perf_monitor.start()
+        
+        # 성능 콜백 등록 (UI 요소 생성 후)
+        self.perf_monitor.add_callback(self.on_performance_update)
+        
         self.log("🎉 통합 카카오톡 챗봇 시스템 시작!")
         self.log("⚡ 성능 최적화 활성화됨")
     
@@ -479,6 +827,32 @@ class UnifiedChatbotGUI(QWidget):
         control_layout.addWidget(self.overlay_btn)
         
         main_tab_layout.addLayout(control_layout)
+        
+        # 테스트 모드 섹션
+        test_group = QGroupBox("🧪 테스트 모드")
+        test_layout = QVBoxLayout()
+        
+        # 테스트 모드 체크박스
+        self.test_mode_checkbox = QCheckBox("테스트 모드 활성화 (특정 셀만 감지)")
+        self.test_mode_checkbox.stateChanged.connect(self.toggle_test_mode)
+        test_layout.addWidget(self.test_mode_checkbox)
+        
+        # 셀 선택 콤보박스
+        cell_select_layout = QHBoxLayout()
+        cell_select_layout.addWidget(QLabel("테스트할 셀:"))
+        
+        self.test_cell_combo = QComboBox()
+        self.test_cell_combo.setEnabled(False)
+        # 셀 목록 추가 (3x5 그리드)
+        for row in range(3):
+            for col in range(5):
+                self.test_cell_combo.addItem(f"셀 [{row},{col}] - monitor_0_cell_{row}_{col}")
+        
+        cell_select_layout.addWidget(self.test_cell_combo)
+        test_layout.addLayout(cell_select_layout)
+        
+        test_group.setLayout(test_layout)
+        main_tab_layout.addWidget(test_group)
         
         # 로그 영역
         log_group = QGroupBox("📋 실시간 로그")
@@ -650,6 +1024,17 @@ class UnifiedChatbotGUI(QWidget):
             self.cache_manager,
             self.perf_monitor
         )
+        
+        # 테스트 모드 설정 전달
+        if self.test_mode_checkbox.isChecked():
+            selected_idx = self.test_cell_combo.currentIndex()
+            row = selected_idx // 5
+            col = selected_idx % 5
+            test_cell_id = f"monitor_0_cell_{row}_{col}"
+            self.monitoring_thread.test_mode = True
+            self.monitoring_thread.test_cell_id = test_cell_id
+            self.log(f"🧪 테스트 모드로 시작: {test_cell_id}만 감지")
+        
         self.monitoring_thread.detection_signal.connect(self.on_detection)
         self.monitoring_thread.automation_signal.connect(self.on_automation)
         self.monitoring_thread.status_signal.connect(self.on_status_update)
@@ -670,6 +1055,16 @@ class UnifiedChatbotGUI(QWidget):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.log("⏹️ 모니터링을 중지했습니다.")
+    
+    def toggle_test_mode(self, state):
+        """테스트 모드 토글"""
+        is_enabled = state == Qt.Checked
+        self.test_cell_combo.setEnabled(is_enabled)
+        
+        if is_enabled:
+            self.log("🧪 테스트 모드 활성화 - 선택한 셀만 감지합니다")
+        else:
+            self.log("📍 테스트 모드 비활성화 - 모든 셀을 감지합니다")
     
     def toggle_overlay(self):
         """오버레이 토글"""
@@ -714,33 +1109,36 @@ class UnifiedChatbotGUI(QWidget):
         timestamp = time.strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
         
-        # 로그 크기 제한
+        # 로그 크기 제한 (QTextCursor 사용 최소화)
         if self.log_text.document().lineCount() > 1000:
-            cursor = self.log_text.textCursor()
-            cursor.movePosition(cursor.Start)
-            cursor.movePosition(cursor.Down, cursor.KeepAnchor, 100)
-            cursor.removeSelectedText()
+            # 간단한 방법으로 텍스트 제한
+            text = self.log_text.toPlainText()
+            lines = text.split('\n')
+            if len(lines) > 900:
+                self.log_text.setPlainText('\n'.join(lines[-900:]))
     
     def on_performance_update(self, metrics):
         """성능 메트릭 업데이트"""
-        # UI 업데이트
-        self.cpu_label.setText(f"CPU: {metrics.cpu_percent:.1f}%")
-        self.memory_label.setText(f"메모리: {metrics.memory_mb:.0f}MB")
+        # UI 요소가 있는지 확인 후 업데이트
+        if self.cpu_label:
+            self.cpu_label.setText(f"CPU: {metrics.cpu_percent:.1f}%")
         
-        if metrics.ocr_latency_ms:
+        if self.memory_label:
+            self.memory_label.setText(f"메모리: {metrics.memory_mb:.0f}MB")
+        
+        if self.ocr_latency_label and metrics.ocr_latency_ms:
             self.ocr_latency_label.setText(f"OCR 레이턴시: {metrics.ocr_latency_ms:.1f}ms")
         
         # 캐시 히트율 계산
-        if hasattr(self.monitoring_thread, 'ocr_engine'):
-            stats = self.monitoring_thread.ocr_engine.ocr_service.get_statistics()
-            hit_rate = stats.get('cache_hit_rate', 0)
-            self.cache_hit_label.setText(f"캐시 히트율: {hit_rate:.1f}%")
+        if self.cache_hit_label and hasattr(self, 'monitoring_thread') and self.monitoring_thread:
+            if hasattr(self.monitoring_thread, 'ocr_engine'):
+                stats = self.monitoring_thread.ocr_engine.ocr_service.get_statistics()
+                hit_rate = stats.get('cache_hit_rate', 0)
+                self.cache_hit_label.setText(f"캐시 히트율: {hit_rate:.1f}%")
         
-        # 최적화 분석
+        # 최적화 분석 (로그 출력 제거)
         recommendations = self.perf_optimizer.analyze_and_optimize(metrics)
-        if recommendations:
-            for rec in recommendations:
-                self.log(f"💡 최적화 제안: {rec}")
+        # 로그 출력하지 않음
     
     def auto_optimize(self):
         """자동 최적화"""
