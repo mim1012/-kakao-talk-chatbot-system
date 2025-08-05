@@ -138,12 +138,28 @@ class OCRService:
             # Garbage collection before OCR to manage memory
             gc.collect()
             
-            # Preprocess image
-            processed_image = self.preprocess_image(image)
+            # Ensure image is in correct format
+            if image is None or image.size == 0:
+                self.logger.warning("Empty image received")
+                return OCRResult()
             
-            # PaddleOCR requires color images, convert grayscale to BGR
-            if len(processed_image.shape) == 2:
-                processed_image = cv2.cvtColor(processed_image, cv2.COLOR_GRAY2BGR)
+            # Convert to BGR if needed (PaddleOCR expects color images)
+            if len(image.shape) == 2:
+                # Grayscale image
+                image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+            elif len(image.shape) == 3 and image.shape[2] == 4:
+                # BGRA image (with alpha channel)
+                image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+            elif len(image.shape) == 3 and image.shape[2] == 3:
+                # Already BGR, no conversion needed
+                pass
+            else:
+                self.logger.warning(f"Unexpected image shape: {image.shape}")
+                return OCRResult()
+            
+            # Skip preprocessing for now to avoid shape issues
+            # processed_image = self.preprocess_image(image)
+            processed_image = image
             
             # Perform OCR
             results = self.paddle_ocr.ocr(processed_image)
