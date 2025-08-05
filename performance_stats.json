@@ -1,690 +1,194 @@
 {
-  "export_time": "2025-08-06T01:38:47.503248",
+  "export_time": "2025-08-06T01:42:57.850083",
   "stats": {
-    "avg_cpu": 0.8964705882352941,
-    "avg_memory": 814.6099264705882,
+    "avg_cpu": 6.5826086956521745,
+    "avg_memory": 492.9991508152174,
     "avg_ocr_latency": 0,
     "total_detections": 0,
     "total_automations": 0,
-    "uptime_seconds": 94.92927551269531
+    "uptime_seconds": 25.979793071746826
   },
   "metrics": [
     {
-      "timestamp": 1754411834.004386,
-      "cpu_percent": 26.4,
-      "memory_mb": 813.76171875,
+      "timestamp": 1754412153.130243,
+      "cpu_percent": 22.7,
+      "memory_mb": 472.9921875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411835.126288,
+      "timestamp": 1754412154.234346,
       "cpu_percent": 0.0,
-      "memory_mb": 814.59765625,
+      "memory_mb": 473.82421875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411836.2289197,
+      "timestamp": 1754412155.3457754,
+      "cpu_percent": 14.2,
+      "memory_mb": 473.9375,
+      "ocr_latency_ms": null,
+      "detection_count": 0,
+      "automation_count": 0
+    },
+    {
+      "timestamp": 1754412156.45321,
       "cpu_percent": 0.0,
-      "memory_mb": 814.59765625,
+      "memory_mb": 474.53125,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411837.3440635,
+      "timestamp": 1754412157.5541658,
       "cpu_percent": 0.0,
-      "memory_mb": 814.59765625,
+      "memory_mb": 490.7734375,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411838.4470017,
+      "timestamp": 1754412158.655014,
       "cpu_percent": 0.0,
-      "memory_mb": 814.59765625,
+      "memory_mb": 490.94921875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411839.5622716,
+      "timestamp": 1754412159.7627888,
       "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
+      "memory_mb": 490.921875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411840.6781993,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411841.778909,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411842.8939505,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411844.0311947,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411845.1421523,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411846.2609346,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411847.3751729,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411848.4782052,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411849.587241,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.55078125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411850.6901793,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.5546875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411851.7914805,
+      "timestamp": 1754412160.871641,
       "cpu_percent": 16.6,
-      "memory_mb": 814.5546875,
+      "memory_mb": 490.92578125,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411852.9049118,
+      "timestamp": 1754412161.984114,
       "cpu_percent": 0.0,
-      "memory_mb": 814.5546875,
+      "memory_mb": 492.89453125,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411854.016424,
+      "timestamp": 1754412163.0928462,
       "cpu_percent": 0.0,
-      "memory_mb": 814.5546875,
+      "memory_mb": 485.03515625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411855.1251535,
+      "timestamp": 1754412164.198501,
+      "cpu_percent": 50.4,
+      "memory_mb": 492.99609375,
+      "ocr_latency_ms": null,
+      "detection_count": 0,
+      "automation_count": 0
+    },
+    {
+      "timestamp": 1754412165.3033745,
       "cpu_percent": 0.0,
-      "memory_mb": 814.5546875,
+      "memory_mb": 493.0,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411856.226301,
+      "timestamp": 1754412166.4045842,
       "cpu_percent": 0.0,
-      "memory_mb": 814.5546875,
+      "memory_mb": 493.015625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411857.341184,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.63671875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411858.4420269,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411859.5534935,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411860.6576703,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411861.7736018,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411862.8757918,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411863.984138,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411865.086514,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411866.1888044,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411867.298187,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411868.4023676,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411869.5179987,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411870.6204457,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411871.7260792,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411872.830709,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411873.9342003,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411875.0495367,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411876.1532393,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411877.2695627,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411878.3735511,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411879.4743595,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.64453125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411880.5768368,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411881.6929932,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411882.8063078,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411883.9089572,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411885.0211704,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411886.1326878,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411887.2404876,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411888.3554235,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411889.468635,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411890.571904,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411891.6751308,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411892.7878945,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.58203125,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411893.8988872,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411895.0033164,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411896.1059535,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411897.2212498,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411898.3367777,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411899.4497306,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411900.5572019,
+      "timestamp": 1754412167.5100458,
       "cpu_percent": 16.6,
-      "memory_mb": 814.56640625,
+      "memory_mb": 485.10546875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411901.65982,
+      "timestamp": 1754412168.6181524,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.1171875,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411902.765706,
+      "timestamp": 1754412169.7258222,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.125,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411903.8676405,
+      "timestamp": 1754412170.8369806,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.25390625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411904.9822598,
+      "timestamp": 1754412171.9505396,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.25390625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411906.0889273,
+      "timestamp": 1754412173.059833,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.25390625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411907.1917524,
+      "timestamp": 1754412174.1605375,
+      "cpu_percent": 14.3,
+      "memory_mb": 504.25390625,
+      "ocr_latency_ms": null,
+      "detection_count": 0,
+      "automation_count": 0
+    },
+    {
+      "timestamp": 1754412175.2651923,
       "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
+      "memory_mb": 504.265625,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0
     },
     {
-      "timestamp": 1754411908.2942207,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.56640625,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411909.3954442,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411910.511605,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411911.6258965,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411912.7269485,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411913.8284073,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411914.9418254,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411916.0519962,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411917.1536841,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411918.267767,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411919.3818665,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411920.4867058,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411921.5892982,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411922.6899247,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411923.8061845,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411924.9195082,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411926.0218859,
-      "cpu_percent": 0.0,
-      "memory_mb": 814.73046875,
-      "ocr_latency_ms": null,
-      "detection_count": 0,
-      "automation_count": 0
-    },
-    {
-      "timestamp": 1754411927.1377535,
+      "timestamp": 1754412176.3700671,
       "cpu_percent": 16.6,
-      "memory_mb": 814.76171875,
+      "memory_mb": 504.2734375,
+      "ocr_latency_ms": null,
+      "detection_count": 0,
+      "automation_count": 0
+    },
+    {
+      "timestamp": 1754412177.483707,
+      "cpu_percent": 0.0,
+      "memory_mb": 504.28125,
       "ocr_latency_ms": null,
       "detection_count": 0,
       "automation_count": 0

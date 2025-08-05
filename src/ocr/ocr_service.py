@@ -63,10 +63,12 @@ class OCRService:
         try:
             # Suppress all output during PaddleOCR initialization
             with suppress_stdout_stderr():
+                # 환경 변수로 GPU 비활성화
+                os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+                
                 self.paddle_ocr = PaddleOCR(
                     lang='korean',
                     use_angle_cls=False,  # 각도 분류기 비활성화
-                    use_gpu=False,  # GPU 비활성화 (멀티스레드 안정성)
                     enable_mkldnn=False,  # MKL-DNN 비활성화 (OneDNN 오류 방지)
                     cpu_threads=1  # CPU 스레드 제한
                 )
