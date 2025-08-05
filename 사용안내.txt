@@ -1,0 +1,24 @@
+=== KakaoTalk OCR Chatbot 사용 안내 ===
+
+[설치 방법]
+1. ZIP 파일을 원하는 폴더에 압축 해제
+2. quick_setup.bat 실행 (자동 설치)
+3. 설치 완료 후 run_chatbot.bat 실행
+
+[수동 설치 (quick_setup.bat이 안 될 때)]
+1. 명령 프롬프트 열기
+2. 압축 해제한 폴더로 이동
+3. 다음 명령어 실행:
+   python -m venv venv
+   venv\Scriptsctivate.bat
+   pip install -r requirements.txt
+4. 실행: python main.py
+
+[필수 프로그램]
+- Python 3.11 (https://www.python.org/downloads/)
+- Windows 10 이상
+
+[문제 해결]
+- 백신 프로그램 일시 중지
+- 관리자 권한으로 실행
+- 인터넷 연결 확인

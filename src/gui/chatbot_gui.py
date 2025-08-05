@@ -84,6 +84,23 @@ else:
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+# 변화 감지 모듈 import
+try:
+    from src.monitoring.change_detection import ChangeDetectionMonitor
+    CHANGE_DETECTION_AVAILABLE = True
+except ImportError:
+    CHANGE_DETECTION_AVAILABLE = False
+    print("[WARN] 변화 감지 모듈을 사용할 수 없습니다")
+
+# 최적화된 병렬 모니터 import
+try:
+    from src.monitoring.optimized_parallel_monitor import OptimizedParallelMonitor, MonitoringOrchestrator
+    from src.monitoring.adaptive_monitor import AdaptivePriorityManager
+    PARALLEL_MONITOR_AVAILABLE = True
+except ImportError:
+    PARALLEL_MONITOR_AVAILABLE = False
+    print("[WARN] 병렬 모니터 모듈을 사용할 수 없습니다")
+
 # Windows DPI 설정
 if sys.platform == "win32":
     import ctypes
@@ -319,6 +336,12 @@ class RealTimeMonitoringThread(QThread):
         self.test_cell_id = None
         self.use_chatroom_coords = True  # 채팅방 좌표 직접 사용
         
+        # 변화 감지 모니터 초기화
+        self.change_detector = None
+        if CHANGE_DETECTION_AVAILABLE:
+            self.change_detector = ChangeDetectionMonitor(change_threshold=0.05)
+            print("[OK] 변화 감지 모니터 활성화 (임계값: 5%)")
+        
         # 자동화 처리 스레드
         self.automation_thread = threading.Thread(target=self._automation_worker, daemon=True)
         self.automation_thread.start()
@@ -381,6 +404,15 @@ class RealTimeMonitoringThread(QThread):
                             }
                             screenshot = sct.grab(ocr_area)
                             image = np.array(screenshot)
+                            
+                            # 변화 감지 적용
+                            if self.change_detector:
+                                if not self.change_detector.has_changed(cell.id, image):
+                                    print(f"   [SKIP] 셀 {cell.id}: 변화 없음 - OCR 스킵")
+                                    continue
+                                else:
+                                    print(f"   [CHANGE] 셀 {cell.id}: 변화 감지됨 - OCR 실행")
+                            
                             region = (x, y, w, h)
                             images_with_regions.append((image, region, cell.id))
                             
@@ -396,7 +428,7 @@ class RealTimeMonitoringThread(QThread):
                         except Exception as e:
                             print(f"   [FAIL] 스크린샷 오류 {cell.id}: {e}")
                     
-                    print(f"캡처 완료: {len(images_with_regions)}개 이미지")
+                    print(f"캡처 완료: {len(images_with_regions)}개 이미지 (변화 감지로 {batch_size - len(images_with_regions)}개 스킵)")
                     
                     # 스크린 캡처 시간 기록
                     if self.perf_monitor:
@@ -420,6 +452,15 @@ class RealTimeMonitoringThread(QThread):
                     
                     # 감지된 결과 리스트
                     detection_results = []
+                    
+                    # 변화 감지 통계 업데이트
+                    if self.change_detector and time.time() % 10 < self.services.config_manager.get('ocr_interval_sec'):
+                        stats = self.change_detector.get_statistics()
+                        self.performance_signal.emit({
+                            'change_detection': stats,
+                            'timestamp': time.time()
+                        })
+                        print(f"[STATS] 변화 감지 - OCR 스킵율: {stats['skip_ratio']:.1%}, 효율성: {stats['efficiency_gain']:.1f}%")
                     
                     # 결과와 셀 매핑 (강화된 콘솔 디버깅)
                     try:
@@ -915,6 +956,10 @@ class UnifiedChatbotGUI(QWidget):
         self.automation_count_label = QLabel("자동화: 0회")
         stats_layout.addWidget(self.automation_count_label)
         
+        # 변화 감지 통계
+        self.change_detection_label = QLabel("변화 감지: -")
+        stats_layout.addWidget(self.change_detection_label)
+        
         main_tab_layout.addLayout(stats_layout)
         
         main_tab.setLayout(main_tab_layout)
@@ -1029,6 +1074,46 @@ class UnifiedChatbotGUI(QWidget):
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
         
+        # 병렬 처리 옵션
+        parallel_group = QGroupBox("병렬 처리 설정")
+        parallel_layout = QVBoxLayout()
+        
+        # 병렬 처리 활성화
+        self.use_parallel_check = QCheckBox("병렬 처리 사용 (실험적)")
+        self.use_parallel_check.setChecked(False)
+        if PARALLEL_MONITOR_AVAILABLE:
+            self.use_parallel_check.setToolTip("변화 감지 + 우선순위 + 병렬 처리를 모두 사용")
+        else:
+            self.use_parallel_check.setEnabled(False)
+            self.use_parallel_check.setToolTip("병렬 모니터 모듈이 없습니다")
+        parallel_layout.addWidget(self.use_parallel_check)
+        
+        # 워커 수 설정
+        worker_layout = QGridLayout()
+        
+        worker_layout.addWidget(QLabel("캡처 워커:"), 0, 0)
+        self.capture_workers_spin = QSpinBox()
+        self.capture_workers_spin.setRange(1, 8)
+        self.capture_workers_spin.setValue(4)
+        worker_layout.addWidget(self.capture_workers_spin, 0, 1)
+        
+        worker_layout.addWidget(QLabel("OCR 워커:"), 1, 0)
+        self.ocr_workers_spin = QSpinBox()
+        self.ocr_workers_spin.setRange(1, 4)
+        self.ocr_workers_spin.setValue(2)
+        worker_layout.addWidget(self.ocr_workers_spin, 1, 1)
+        
+        parallel_layout.addLayout(worker_layout)
+        
+        # 적응형 스캔 활성화
+        self.adaptive_scan_check = QCheckBox("적응형 스캔 주기")
+        self.adaptive_scan_check.setChecked(True)
+        self.adaptive_scan_check.setToolTip("활발한 채팅방은 자주, 조용한 채팅방은 느리게 스캔")
+        parallel_layout.addWidget(self.adaptive_scan_check)
+        
+        parallel_group.setLayout(parallel_layout)
+        layout.addWidget(parallel_group)
+        
         # 디버그 옵션
         debug_group = QGroupBox("디버그")
         debug_layout = QVBoxLayout()
@@ -1052,10 +1137,17 @@ class UnifiedChatbotGUI(QWidget):
             self.log("[FAIL] PaddleOCR이 설치되지 않았습니다.")
             return
         
-        if self.monitoring_thread and self.monitoring_thread.running:
+        if hasattr(self, 'monitoring_thread') and self.monitoring_thread and self.monitoring_thread.running:
             self.log("[WARN] 이미 모니터링 중입니다.")
             return
         
+        # 병렬 모니터 사용 여부 확인
+        if PARALLEL_MONITOR_AVAILABLE and self.use_parallel_check.isChecked():
+            self.log("[INFO] 최적화된 병렬 모니터를 사용합니다.")
+            self.start_parallel_monitoring()
+            return
+        
+        # 기존 모니터링 방식
         self.monitoring_thread = RealTimeMonitoringThread(
             self.services, 
             self.cache_manager,
@@ -1075,6 +1167,7 @@ class UnifiedChatbotGUI(QWidget):
         self.monitoring_thread.detection_signal.connect(self.on_detection)
         self.monitoring_thread.automation_signal.connect(self.on_automation)
         self.monitoring_thread.status_signal.connect(self.on_status_update)
+        self.monitoring_thread.performance_signal.connect(self.on_performance_update)
         self.monitoring_thread.start()
         
         self.status_label.setText("실시간 모니터링 중...")
@@ -1082,9 +1175,114 @@ class UnifiedChatbotGUI(QWidget):
         self.stop_btn.setEnabled(True)
         self.log("[OK] 모니터링을 시작했습니다.")
     
+    def start_parallel_monitoring(self):
+        """병렬 모니터링 시작"""
+        # 설정 업데이트
+        self.services.config_manager._config['parallel_processing'] = {
+            'enabled': True,
+            'capture_workers': self.capture_workers_spin.value(),
+            'ocr_workers': self.ocr_workers_spin.value()
+        }
+        
+        # 병렬 모니터 생성
+        self.parallel_orchestrator = MonitoringOrchestrator(
+            self.services.grid_manager,
+            self.services.ocr_service,
+            self.services.config_manager._config
+        )
+        
+        self.parallel_orchestrator.start()
+        
+        # 병렬 모니터 결과 처리 스레드
+        self.parallel_result_thread = threading.Thread(
+            target=self._process_parallel_results, 
+            daemon=True
+        )
+        self.parallel_result_thread.start()
+        
+        # 통계 업데이트 타이머
+        self.parallel_stats_timer = QTimer()
+        self.parallel_stats_timer.timeout.connect(self._update_parallel_stats)
+        self.parallel_stats_timer.start(1000)  # 1초마다 업데이트
+        
+        self.status_label.setText("병렬 모니터링 중...")
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.log(f"[OK] 병렬 모니터링 시작 (캡처워커: {self.capture_workers_spin.value()}, OCR워커: {self.ocr_workers_spin.value()})")
+    
+    def _process_parallel_results(self):
+        """병렬 모니터 결과 처리"""
+        while hasattr(self, 'parallel_orchestrator') and self.parallel_orchestrator.running:
+            task = self.parallel_orchestrator.get_automation_task(timeout=0.1)
+            if task:
+                # GUI 업데이트를 위해 시그널 emit
+                self.detection_count += 1
+                self.detection_count_label.setText(f"감지: {self.detection_count}회")
+                
+                # 자동화 실행
+                cell_id = task['cell_id']
+                text = task['text']
+                cell = self._get_cell_by_id(cell_id)
+                if cell:
+                    x, y = self._get_click_position(cell)
+                    self.services.automation_service.execute_automation(x, y, cell_id)
+                    self.automation_count += 1
+                    self.automation_count_label.setText(f"자동화: {self.automation_count}회")
+                    self.log(f"[AUTO] {cell_id}: '{text}' → 자동화 실행")
+    
+    def _update_parallel_stats(self):
+        """병렬 모니터 통계 업데이트"""
+        if hasattr(self, 'parallel_orchestrator'):
+            stats = self.parallel_orchestrator.get_statistics()
+            
+            # 변화 감지 통계
+            change_stats = stats.get('change_detection', {})
+            skip_percent = change_stats.get('skip_ratio', 0) * 100
+            efficiency = change_stats.get('efficiency_gain', 0)
+            self.change_detection_label.setText(f"변화 감지: 스킵 {skip_percent:.0f}% (효율 +{efficiency:.0f}%)")
+            
+            # 우선순위 통계
+            priority_stats = stats.get('priority_management', {})
+            active_cells = priority_stats.get('active_cells', 0)
+            avg_interval = priority_stats.get('average_interval', 0)
+            
+            # 성능 텍스트에 상세 정보 표시
+            perf_text = f"병렬 모니터 통계:\n"
+            perf_text += f"- 평균 스캔 시간: {stats.get('avg_scan_time', 0)*1000:.1f}ms\n"
+            perf_text += f"- 활발한 채팅방: {active_cells}개\n"
+            perf_text += f"- 평균 스캔 주기: {avg_interval:.1f}초\n"
+            perf_text += f"- 변화 감지 스킵: {stats.get('skipped_by_change', 0)}회\n"
+            perf_text += f"- 우선순위 스킵: {stats.get('skipped_by_priority', 0)}회"
+            
+            if hasattr(self, 'perf_text'):
+                self.perf_text.setPlainText(perf_text)
+    
+    def _get_cell_by_id(self, cell_id: str):
+        """ID로 셀 찾기"""
+        for cell in self.services.grid_manager.cells:
+            if cell.id == cell_id:
+                return cell
+        return None
+    
+    def _get_click_position(self, cell) -> Tuple[int, int]:
+        """클릭 위치 계산"""
+        x, y, w, h = cell.bounds
+        click_x = x + w // 2
+        click_y = y + h - self.services.config_manager.get('input_box_offset', {}).get('from_bottom', 20)
+        return click_x, click_y
+    
     def stop_monitoring(self):
         """모니터링 중지"""
-        if self.monitoring_thread:
+        # 병렬 모니터 중지
+        if hasattr(self, 'parallel_orchestrator'):
+            self.parallel_orchestrator.stop()
+            del self.parallel_orchestrator
+            
+        if hasattr(self, 'parallel_stats_timer'):
+            self.parallel_stats_timer.stop()
+            
+        # 기존 모니터 중지
+        if hasattr(self, 'monitoring_thread') and self.monitoring_thread:
             self.monitoring_thread.stop()
             self.monitoring_thread.wait()
             
@@ -1179,11 +1377,19 @@ class UnifiedChatbotGUI(QWidget):
     
     def on_performance_update(self, metrics):
         """성능 메트릭 업데이트"""
+        # 변화 감지 통계 업데이트
+        if isinstance(metrics, dict) and 'change_detection' in metrics:
+            stats = metrics['change_detection']
+            skip_percent = stats.get('skip_ratio', 0) * 100
+            efficiency = stats.get('efficiency_gain', 0)
+            self.change_detection_label.setText(f"변화 감지: 스킵 {skip_percent:.0f}% (효율 +{efficiency:.0f}%)")
+            return
+        
         # UI 요소가 있는지 확인 후 업데이트
-        if self.cpu_label:
+        if hasattr(metrics, 'cpu_percent') and hasattr(self, 'cpu_label') and self.cpu_label:
             self.cpu_label.setText(f"CPU: {metrics.cpu_percent:.1f}%")
         
-        if self.memory_label:
+        if hasattr(metrics, 'memory_mb') and hasattr(self, 'memory_label') and self.memory_label:
             self.memory_label.setText(f"메모리: {metrics.memory_mb:.0f}MB")
         
         if self.ocr_latency_label and metrics.ocr_latency_ms:

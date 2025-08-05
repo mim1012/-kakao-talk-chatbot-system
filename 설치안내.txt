@@ -1,0 +1,35 @@
+=== KakaoTalk OCR Chatbot 사용 안내 ===
+
+[설치 방법 - 옵션 1: 자동 설치]
+1. install_simple.bat 더블클릭
+2. 완료 후 run.bat 실행
+
+[설치 방법 - 옵션 2: 수동 설치]
+1. install_manual.bat 더블클릭
+2. 안내에 따라 진행
+
+[설치 방법 - 옵션 3: 명령 프롬프트]
+1. 명령 프롬프트(cmd) 열기
+2. 이 폴더로 이동
+3. 다음 명령어 실행:
+   pip install numpy==1.26.4
+   pip install paddlepaddle paddleocr
+   pip install PyQt5 pyautogui mss screeninfo pyperclip psutil
+4. 실행: python main.py
+
+[실행 방법]
+- run.bat 더블클릭
+- 또는 명령 프롬프트에서: python main.py
+
+[필수 프로그램]
+- Python 3.11 (https://www.python.org/downloads/)
+- Windows 10 이상
+
+[문제 해결]
+1. 백신 프로그램 일시 중지
+2. 명령 프롬프트를 관리자 권한으로 실행
+3. 인터넷 연결 확인
+4. Python PATH 설정 확인
+
+[지원]
+- 설치 문제가 계속되면 수동으로 각 패키지를 하나씩 설치해보세요.

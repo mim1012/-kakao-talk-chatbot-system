@@ -35,7 +35,8 @@
       "Bash(rd:*)",
       "Bash(timeout:*)",
       "Bash(grep:*)",
-      "Bash(del debug_capture_*.png)"
+      "Bash(del debug_capture_*.png)",
+      "Bash(git rm:*)"
     ],
     "deny": []
   }

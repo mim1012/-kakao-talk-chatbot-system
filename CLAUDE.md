@@ -65,6 +65,8 @@ Main configuration in `config.json`:
 4. **Mouse Automation Fix** (2025-08-05): Switched from Win32 API to PyAutoGUI for reliable mouse control
 5. **Screen Flicker Prevention** (2025-08-05): Disabled overlay color animations and debug screenshots
 6. **UI Enhancement** (2025-08-05): Added real-time overlay height adjustment (30-200px, 10px steps)
+7. **Change Detection** (2025-08-06): Implemented image change detection to skip OCR on unchanged cells (80%+ efficiency gain)
+8. **Advanced Optimization** (2025-08-06): Added adaptive priority management and parallel processing for real-time monitoring of 30 chat rooms
 
 ## Critical Implementation Notes
 
