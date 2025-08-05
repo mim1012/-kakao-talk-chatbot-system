@@ -1,7 +1,7 @@
 {
   "grid_rows": 3,
   "grid_cols": 5,
-  "ocr_interval_sec": 0.3,
+  "ocr_interval_sec": 2.0,
   "parallel_processing": {
     "enabled": false,
     "capture_workers": 4,
@@ -21,7 +21,7 @@
   ],
   "require_min_triggers": 1,
   "ocr_preprocess": {
-    "scale": 4.0,
+    "scale": 2.0,
     "adaptive_thresh_blocksize": 11,
     "adaptive_thresh_C": 2,
     "use_morph_close": true,
@@ -129,6 +129,6 @@
     "input_position_fallback_offset": 50,
     "cells_per_cycle": 15,
     "enable_batch_processing": true,
-    "max_concurrent_ocr": 6
+    "max_concurrent_ocr": 1
   }
 }
