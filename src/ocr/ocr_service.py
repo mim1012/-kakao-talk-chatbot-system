@@ -61,17 +61,13 @@ class OCRService:
     def _initialize_paddle_ocr(self) -> None:
         """Initialize PaddleOCR with optimized settings."""
         try:
+            # 환경 변수로 GPU 비활성화
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+            
             # Suppress all output during PaddleOCR initialization
             with suppress_stdout_stderr():
-                # 환경 변수로 GPU 비활성화
-                os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-                
-                self.paddle_ocr = PaddleOCR(
-                    lang='korean',
-                    use_angle_cls=False,  # 각도 분류기 비활성화
-                    enable_mkldnn=False,  # MKL-DNN 비활성화 (OneDNN 오류 방지)
-                    cpu_threads=1  # CPU 스레드 제한
-                )
+                # 최소한의 파라미터만 사용
+                self.paddle_ocr = PaddleOCR(lang='korean')
                 
             self.logger.info("PaddleOCR initialized successfully")
             
@@ -163,9 +159,14 @@ class OCRService:
                 self.logger.warning(f"Unexpected image shape: {image.shape}")
                 return OCRResult()
             
-            # Skip preprocessing for now to avoid shape issues
-            # processed_image = self.preprocess_image(image)
-            processed_image = image
+            # Preprocess image
+            processed_image = self.preprocess_image(image)
+            
+            # Ensure image is in BGR format for PaddleOCR
+            if len(processed_image.shape) == 2:
+                processed_image = cv2.cvtColor(processed_image, cv2.COLOR_GRAY2BGR)
+            elif len(processed_image.shape) == 3 and processed_image.shape[2] == 4:
+                processed_image = cv2.cvtColor(processed_image, cv2.COLOR_BGRA2BGR)
             
             # Perform OCR
             results = self.paddle_ocr.ocr(processed_image)
