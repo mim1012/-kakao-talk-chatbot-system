@@ -142,7 +142,7 @@ class OCRService:
             processed_image = self.preprocess_image(image)
             
             # Perform OCR
-            results = self.paddle_ocr.ocr(processed_image, cls=False)
+            results = self.paddle_ocr.ocr(processed_image)
             
             if not results or not results[0]:
                 return OCRResult()
