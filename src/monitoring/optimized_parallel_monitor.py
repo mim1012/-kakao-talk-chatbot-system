@@ -90,53 +90,52 @@ class OptimizedParallelMonitor:
     
     def _monitor_loop(self):
         """메인 모니터링 루프"""
-        with mss.mss() as sct:
-            while self.running:
-                try:
-                    cycle_start = time.time()
+        while self.running:
+            try:
+                cycle_start = time.time()
+                
+                # 1. 스캔할 셀 선택 (적응형 우선순위)
+                all_cell_ids = [cell.id for cell in self.grid_manager.cells 
+                               if cell.can_be_triggered()]
+                cells_to_scan = self.adaptive_strategy.get_cells_to_scan(
+                    all_cell_ids, 
+                    max_batch=15
+                )
+                
+                if not cells_to_scan:
+                    time.sleep(0.1)
+                    continue
+                
+                self.stats['total_scans'] += 1
+                
+                # 2. 병렬 캡처 및 처리 (sct 인자 제거)
+                results = self._parallel_process_cells(cells_to_scan)
+                
+                # 3. 결과 처리 및 우선순위 업데이트
+                scan_results = {}
+                for result in results:
+                    if result.trigger_found:
+                        self.stats['triggers_found'] += 1
+                        self.result_queue.put(result)
                     
-                    # 1. 스캔할 셀 선택 (적응형 우선순위)
-                    all_cell_ids = [cell.id for cell in self.grid_manager.cells 
-                                   if cell.can_be_triggered()]
-                    cells_to_scan = self.adaptive_strategy.get_cells_to_scan(
-                        all_cell_ids, 
-                        max_batch=15
-                    )
-                    
-                    if not cells_to_scan:
-                        time.sleep(0.1)
-                        continue
-                    
-                    self.stats['total_scans'] += 1
-                    
-                    # 2. 병렬 캡처 및 처리
-                    results = self._parallel_process_cells(cells_to_scan, sct)
-                    
-                    # 3. 결과 처리 및 우선순위 업데이트
-                    scan_results = {}
-                    for result in results:
-                        if result.trigger_found:
-                            self.stats['triggers_found'] += 1
-                            self.result_queue.put(result)
-                        
-                        scan_results[result.cell_id] = result.trigger_found
-                    
-                    # 4. 적응형 전략에 결과 보고
-                    self.adaptive_strategy.report_results(scan_results)
-                    
-                    # 5. 사이클 시간 측정
-                    cycle_time = time.time() - cycle_start
-                    self._update_stats(cycle_time)
-                    
-                    # 동적 대기 시간
-                    sleep_time = max(0.05, self.config.get('ocr_interval_sec', 0.3) - cycle_time)
-                    time.sleep(sleep_time)
-                    
-                except Exception as e:
-                    logger.error(f"모니터링 루프 오류: {e}")
-                    time.sleep(1)
+                    scan_results[result.cell_id] = result.trigger_found
+                
+                # 4. 적응형 전략에 결과 보고
+                self.adaptive_strategy.report_results(scan_results)
+                
+                # 5. 사이클 시간 측정
+                cycle_time = time.time() - cycle_start
+                self._update_stats(cycle_time)
+                
+                # 동적 대기 시간
+                sleep_time = max(0.05, self.config.get('ocr_interval_sec', 0.3) - cycle_time)
+                time.sleep(sleep_time)
+                
+            except Exception as e:
+                logger.error(f"모니터링 루프 오류: {e}")
+                time.sleep(1)
     
-    def _parallel_process_cells(self, cell_ids: List[str], sct) -> List[MonitoringResult]:
+    def _parallel_process_cells(self, cell_ids: List[str]) -> List[MonitoringResult]:
         """셀들을 병렬로 처리"""
         futures = []
         results = []
@@ -144,7 +143,7 @@ class OptimizedParallelMonitor:
         # 병렬 캡처 및 변화 감지
         capture_futures = {}
         for cell_id in cell_ids:
-            future = self.capture_pool.submit(self._capture_and_detect, cell_id, sct)
+            future = self.capture_pool.submit(self._capture_and_detect, cell_id)
             capture_futures[future] = cell_id
         
         # 캡처 결과 수집 및 OCR 제출
@@ -160,8 +159,7 @@ class OptimizedParallelMonitor:
                     )
                     ocr_futures[ocr_future] = (cell_id, time.time())
                 else:
-                    # 변화 없음
-                    self.stats['skipped_by_change'] += 1
+                    # 변화 없음 (이미 _capture_and_detect에서 카운트됨)
                     results.append(MonitoringResult(
                         cell_id=cell_id,
                         has_change=False,
@@ -193,25 +191,29 @@ class OptimizedParallelMonitor:
         
         return results
     
-    def _capture_and_detect(self, cell_id: str, sct) -> Optional[Tuple[np.ndarray, Tuple]]:
+    def _capture_and_detect(self, cell_id: str) -> Optional[Tuple[np.ndarray, Tuple]]:
         """화면 캡처 및 변화 감지"""
         cell = self._get_cell_by_id(cell_id)
         if not cell:
             return None
         
         try:
-            # 캡처
-            x, y, w, h = cell.ocr_area
-            monitor = {"left": x, "top": y, "width": w, "height": h}
-            screenshot = sct.grab(monitor)
-            image = np.array(screenshot)
-            
-            # 변화 감지
-            if self.change_detector.has_changed(cell_id, image):
-                self.stats['changes_detected'] += 1
-                return (image, (x, y, w, h))
-            else:
-                return None
+            # 각 스레드에서 독립적인 mss 인스턴스 생성
+            with mss.mss() as sct:
+                # 캡처
+                x, y, w, h = cell.ocr_area
+                monitor = {"left": x, "top": y, "width": w, "height": h}
+                screenshot = sct.grab(monitor)
+                image = np.array(screenshot)
+                
+                # 변화 감지
+                if self.change_detector.has_changed(cell_id, image):
+                    self.stats['changes_detected'] += 1
+                    logger.debug(f"변화 감지됨: {cell_id}")
+                    return (image, (x, y, w, h))
+                else:
+                    self.stats['skipped_by_change'] += 1
+                    return None
                 
         except Exception as e:
             logger.error(f"캡처 실패 {cell_id}: {e}")
@@ -221,7 +223,7 @@ class OptimizedParallelMonitor:
         """OCR 수행 및 트리거 확인"""
         try:
             # OCR 실행
-            result = self.ocr_service.perform_ocr_with_recovery(image, cell_id)
+            result = self.ocr_service.perform_ocr(image)
             
             # 트리거 패턴 확인
             trigger_found = False

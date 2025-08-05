@@ -131,7 +131,7 @@ except Exception:
 from screeninfo import get_monitors
 
 # 서비스 임포트
-from core.service_container import ServiceContainer, MonitoringOrchestrator
+from core.service_container import ServiceContainer
 from core.grid_manager import GridCell, CellStatus
 from core.cache_manager import CacheManager
 from monitoring.performance_monitor import PerformanceMonitor, PerformanceOptimizer

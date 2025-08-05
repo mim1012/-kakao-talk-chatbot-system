@@ -1,5 +1,20 @@
 # 업데이트 로그
 
+## 2025-08-06 병렬 처리 오류 수정
+
+### 수정된 오류들
+1. **MonitoringOrchestrator TypeError**
+   - 원인: service_container에서 중복 import로 잘못된 클래스 참조
+   - 해결: chatbot_gui.py에서 중복 import 제거
+
+2. **mss 스레드 안전성 오류**
+   - 원인: 여러 스레드가 동일한 mss 인스턴스 공유
+   - 해결: 각 스레드에서 독립적인 mss 인스턴스 생성
+
+3. **OCRService 메서드 오류**
+   - 원인: perform_ocr_with_recovery 메서드가 없음
+   - 해결: perform_ocr 메서드로 변경
+
 ## 2025-08-06 완전한 성능 최적화
 
 ### 1. 변화 감지 시스템
