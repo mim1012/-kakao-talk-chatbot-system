@@ -30,7 +30,12 @@
       "Bash(venvScripts:*)",
       "Bash(venv\\Scripts\\python.exe:*)",
       "Bash(.venvScriptspython.exe --version)",
-      "Bash(.\\venv\\Scripts\\python.exe -m pip uninstall:*)"
+      "Bash(.\\venv\\Scripts\\python.exe -m pip uninstall:*)",
+      "Bash(set QT_PLUGIN_PATH=C:UserssamsungAppDataLocalProgramsPythonPython311Libsite-packagesPyQt5Qt5plugins)",
+      "Bash(rd:*)",
+      "Bash(timeout:*)",
+      "Bash(grep:*)",
+      "Bash(del debug_capture_*.png)"
     ],
     "deny": []
   }

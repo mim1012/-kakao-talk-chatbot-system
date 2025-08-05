@@ -67,9 +67,30 @@ class SendInputAutomation:
         
     def set_cursor_pos(self, x, y):
         """SendInput으로 마우스 이동"""
+        # SetCursorPos를 먼저 시도 (더 신뢰할 수 있음)
+        try:
+            result = self.user32.SetCursorPos(int(x), int(y))
+            if result:
+                return True
+        except Exception as e:
+            print(f"SetCursorPos 실패: {e}")
+        
+        # SendInput으로 폴백
+        # 듀얼 모니터를 고려한 전체 가상 화면 크기 계산
+        SM_XVIRTUALSCREEN = 76
+        SM_YVIRTUALSCREEN = 77
+        SM_CXVIRTUALSCREEN = 78
+        SM_CYVIRTUALSCREEN = 79
+        
+        virtual_x = self.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+        virtual_y = self.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+        virtual_width = self.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+        virtual_height = self.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        
         # 절대 좌표로 변환 (0-65535 범위)
-        absolute_x = int(x * 65536 / self.screen_width)
-        absolute_y = int(y * 65536 / self.screen_height)
+        # 음수 좌표도 처리
+        absolute_x = int((x - virtual_x) * 65536 / virtual_width)
+        absolute_y = int((y - virtual_y) * 65536 / virtual_height)
         
         # INPUT 구조체 생성
         extra = ctypes.c_ulong(0)

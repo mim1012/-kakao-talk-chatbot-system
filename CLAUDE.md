@@ -62,6 +62,9 @@ Main configuration in `config.json`:
 1. **GUI Consolidation** (2025-08-04): Merged 3 GUI files into unified `chatbot_gui.py`
 2. **Performance Optimization**: Added caching system, performance monitoring, and dynamic optimization
 3. **Test Framework**: Added pytest-based unit tests with fixtures and mocking
+4. **Mouse Automation Fix** (2025-08-05): Switched from Win32 API to PyAutoGUI for reliable mouse control
+5. **Screen Flicker Prevention** (2025-08-05): Disabled overlay color animations and debug screenshots
+6. **UI Enhancement** (2025-08-05): Added real-time overlay height adjustment (30-200px, 10px steps)
 
 ## Critical Implementation Notes
 
@@ -79,6 +82,8 @@ Main configuration in `config.json`:
 2. **PyQt5 platform plugin**: Use `run_with_qt.bat` or set QT_PLUGIN_PATH manually
 3. **OCR not detecting**: Check coordinates with verification tools, ensure KakaoTalk windows are in expected positions
 4. **High CPU usage**: Reduce `max_concurrent_ocr` in config or increase `ocr_interval_sec`
+5. **Mouse click not working**: Adjust `input_box_offset.from_bottom` in config.json (default 20px)
+6. **Screen flickering**: Turn off overlay display or update to latest version which disables color animations
 
 ## Testing Guidelines
 

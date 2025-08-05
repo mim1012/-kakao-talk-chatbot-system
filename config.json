@@ -2,13 +2,20 @@
   "grid_rows": 3,
   "grid_cols": 5,
   "ocr_interval_sec": 0.3,
+  "parallel_processing": {
+    "enabled": false,
+    "capture_workers": 4,
+    "ocr_workers": 2,
+    "zone_count": 3,
+    "comment": "병렬 처리 설정 (실험적 기능)"
+  },
   "cooldown_sec": 5,
   "ocr_scale": 2.0,
-  "trigger_patterns": ["들어왔습니다", "님이", "입장", "들어왔", "참여"],
+  "trigger_patterns": ["들어왔습니다"],
   "use_regex_trigger": true,
-  "regex_patterns": [".*(들어왔습니다|님이|입장|들어왔|참여).*"],
+  "regex_patterns": [".*들어왔습니다.*"],
   "monitor_mode": "all",
-  "use_easyocr": true,
+  "use_easyocr": false,
   "easyocr_languages": [
     "ko"
   ],
@@ -113,8 +120,8 @@
     "cooldown_after_failure": 5.0
   },
   "input_box_offset": {
-    "from_bottom": 8,
-    "comment": "셀 하단에서 위로 몇 픽셀 위치를 클릭할지 설정"
+    "from_bottom": 20,
+    "comment": "셀 하단에서 위로 몇 픽셀 위치를 클릭할지 설정 (카카오톡 입력창 위치)"
   },
   "automation_config": {
     "max_retries": 3,
