@@ -56,8 +56,8 @@ class OptimizedParallelMonitor:
         self.capture_pool = ThreadPoolExecutor(max_workers=self.capture_workers)
         self.ocr_pool = ThreadPoolExecutor(max_workers=self.ocr_workers)
         
-        # 큐
-        self.result_queue = queue.Queue()
+        # 큐 (백프레셔를 위해 크기 제한)
+        self.result_queue = queue.Queue(maxsize=100)  # 최대 100개까지만
         
         # 상태
         self.running = False
@@ -113,7 +113,13 @@ class OptimizedParallelMonitor:
                 
                 self.stats['total_scans'] += 1
                 
-                # 2. 병렬 캡처 및 처리 (sct 인자 제거)
+                # 2. 큐 크기 확인 (백프레셔)
+                if self.result_queue.qsize() > 80:
+                    logger.warning(f"큐 포화 경고: {self.result_queue.qsize()}/100")
+                    cells_to_scan = cells_to_scan[:len(cells_to_scan)//2]  # 절반만 처리
+                    time.sleep(0.1)  # 짧은 대기
+                
+                # 병렬 캡처 및 처리
                 results = self._parallel_process_cells(cells_to_scan)
                 
                 # 3. 결과 처리 및 우선순위 업데이트

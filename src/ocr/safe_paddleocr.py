@@ -23,11 +23,16 @@ def create_safe_paddleocr():
     try:
         from paddleocr import PaddleOCR
         
-        # 새로운 PaddleOCR 버전에 맞춘 간단한 설정
+        # 빠른 처리를 위한 최적화 설정
         ocr_instance = PaddleOCR(
             lang='korean',
             use_angle_cls=False,  # 각도 분류기 비활성화
-            enable_mkldnn=False  # MKLDNN 비활성화 (Tensor 오류 방지)
+            enable_mkldnn=False,  # MKLDNN 비활성화
+            det_db_box_thresh=0.3,  # 박스 임계값 낮춤 (빠른 감지)
+            rec_batch_num=1,  # 배치 크기 줄임
+            max_text_length=10,  # 최대 텍스트 길이 제한
+            use_gpu=False,  # GPU 비활성화 (CPU가 더 빠를 수 있음)
+            det_limit_side_len=640  # 이미지 크기 제한 (빠른 처리)
         )
         
         print("✅ 안전한 PaddleOCR 인스턴스 생성 완료")

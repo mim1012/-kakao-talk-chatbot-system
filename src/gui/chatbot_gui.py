@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import json
 import time
+from datetime import datetime
 import queue
 import threading
 import logging
@@ -110,8 +111,10 @@ if sys.platform == "win32":
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QPushButton, QTextEdit, QSpinBox, QCheckBox, 
                             QGroupBox, QGridLayout, QScrollArea, QDoubleSpinBox,
-                            QSlider, QComboBox, QTabWidget)
+                            QSlider, QComboBox, QTabWidget, QTableWidget, QTableWidgetItem,
+                            QHeaderView)
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QRect, QMetaType
+from PyQt5.QtGui import QColor
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QTextCursor
 
 # QTextCursor를 메타타입으로 등록 (스레드 간 통신을 위해)
@@ -135,7 +138,7 @@ from core.service_container import ServiceContainer
 from core.grid_manager import GridCell, CellStatus
 from core.cache_manager import CacheManager
 from monitoring.performance_monitor import PerformanceMonitor, PerformanceOptimizer
-from ocr.enhanced_ocr_service import EnhancedOCRService
+# from ocr.enhanced_ocr_service import EnhancedOCRService  # ServiceContainer가 처리
 from utils.suppress_output import suppress_stdout_stderr
 
 # PaddleOCR
@@ -164,15 +167,24 @@ class HighPerformanceOCREngine:
         self.perf_monitor = perf_monitor
         
         # ConfigManager 객체 생성 (dict를 ConfigManager로 변환)
-        from core.config_manager import ConfigManager
+        from src.core.config_manager import ConfigManager
         if isinstance(config, dict):
             config_manager = ConfigManager()
             config_manager._config = config
         else:
             config_manager = config
             
-        # EnhancedOCRService 사용
-        self.ocr_service = EnhancedOCRService(config_manager)
+        # 고속 OCR 어댑터 사용 (기존 ServiceContainer 대신)
+        try:
+            from src.ocr.fast_ocr_adapter import FastOCRAdapter
+            self.ocr_service = FastOCRAdapter(config_manager)
+            print("[고속 OCR] Fast OCR Adapter 사용")
+        except Exception as e:
+            print(f"[경고] Fast OCR Adapter 로드 실패: {e}")
+            # 폴백: 기존 ServiceContainer 사용
+            from src.core.service_container import ServiceContainer
+            temp_container = ServiceContainer()
+            self.ocr_service = temp_container._ocr_service
         
         # ThreadPoolExecutor 생성 (기본값 사용)
         from concurrent.futures import ThreadPoolExecutor
@@ -318,6 +330,7 @@ class RealTimeMonitoringThread(QThread):
     automation_signal = pyqtSignal(str, str)  # cell_id, result
     status_signal = pyqtSignal(str)  # status message
     performance_signal = pyqtSignal(dict)  # performance metrics
+    cell_status_signal = pyqtSignal(str, str, str)  # cell_id, status, timestamp
     
     def __init__(self, service_container: ServiceContainer, cache_manager=None, perf_monitor=None):
         super().__init__()
@@ -335,6 +348,16 @@ class RealTimeMonitoringThread(QThread):
         self.test_mode = False
         self.test_cell_id = None
         self.use_chatroom_coords = True  # 채팅방 좌표 직접 사용
+        
+        # 초고속 캡처 엔진 초기화
+        self.ultra_fast_capture = None
+        try:
+            from src.monitoring.ultra_fast_capture import UltraFastCaptureManager, CaptureRegion
+            self.ultra_fast_capture = UltraFastCaptureManager()
+            self.CaptureRegion = CaptureRegion
+            print("[초고속] Ultra Fast Capture 엔진 활성화")
+        except Exception as e:
+            print(f"[경고] Ultra Fast Capture 로드 실패: {e}")
         
         # 변화 감지 모니터 초기화
         self.change_detector = None
@@ -354,9 +377,15 @@ class RealTimeMonitoringThread(QThread):
         self.status_signal.emit("모니터링 시작")
         
         with mss.mss() as sct:
+            loop_count = 0
             while self.running:
                 try:
+                    loop_count += 1
                     start_time = time.time()
+                    
+                    # 10번마다 상태 출력
+                    if loop_count % 10 == 0:
+                        print(f"[LOOP {loop_count}] 모니터링 루프 실행 중... (시간: {datetime.now().strftime('%H:%M:%S')})")
                     
                     # 활성 셀 가져오기
                     self.services.grid_manager.update_cell_cooldowns()
@@ -370,85 +399,122 @@ class RealTimeMonitoringThread(QThread):
                     else:
                         active_cells = [cell for cell in self.services.grid_manager.cells 
                                       if cell.can_be_triggered()]
+                        
+                        # 카카오톡 채팅방 위치를 우선 처리 (monitor_0의 cell들)
+                        priority_cells = [c for c in active_cells if 'monitor_0' in c.id]
+                        other_cells = [c for c in active_cells if 'monitor_0' not in c.id]
+                        active_cells = priority_cells + other_cells
                     
                     if not active_cells:
-                        time.sleep(0.1)
+                        time.sleep(0.05)  # 더 짧은 대기 시간
                         continue
                     
-                    # 동적 배치 크기 결정
-                    if self.perf_monitor:
-                        stats = self.perf_monitor.get_current_stats()
-                        if stats.avg_cpu > 70:
-                            batch_size = 8  # CPU 부하가 높으면 배치 크기 감소
-                        else:
-                            batch_size = 15
-                    else:
-                        batch_size = 15
+                    # 배치 크기 제한 (최대 10개씩 처리 - 고속 OCR로 더 많이 가능)
+                    batch_size = min(10, len(active_cells))  # 최대 10개씩 처리
                     
-                    # 배치 스크린샷 (최적화된 크기)
+                    # 초고속 배치 캡처
                     images_with_regions = []
                     capture_start = time.time()
                     
-                    print(f"{len(active_cells[:batch_size])}개 셀 스크린샷 캡처 시작...")
+                    # 디버그: 첫 루프에서만 출력
+                    if loop_count == 1:
+                        print(f"{len(active_cells)}개 셀 초고속 캡처 시작...")
                     
-                    for cell in active_cells[:batch_size]:
-                        try:
+                    if self.ultra_fast_capture:
+                        # 초고속 캡처 엔진 사용
+                        capture_regions = []
+                        for cell in active_cells[:batch_size]:
                             x, y, w, h = cell.ocr_area
-                            print(f"   셀 {cell.id}: 영역 ({x}, {y}, {w}, {h})")
+                            region = self.CaptureRegion(x, y, w, h, cell.id)
+                            capture_regions.append(region)
                             
-                            ocr_area = {
-                                'left': x,
-                                'top': y, 
-                                'width': w,
-                                'height': h
-                            }
-                            screenshot = sct.grab(ocr_area)
-                            image = np.array(screenshot)
-                            
-                            # 변화 감지 적용
-                            if self.change_detector:
-                                if not self.change_detector.has_changed(cell.id, image):
-                                    print(f"   [SKIP] 셀 {cell.id}: 변화 없음 - OCR 스킵")
+                            # 셀 상태 업데이트 - 캡처 중
+                            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                            self.cell_status_signal.emit(cell.id, "캡처 중", timestamp)
+                        
+                        # 배치 캡처 실행 (Win32 API 사용)
+                        captured_images = self.ultra_fast_capture.capture_batch(capture_regions)
+                        
+                        # 결과 매핑
+                        for i, (image, region) in enumerate(zip(captured_images, capture_regions)):
+                            if image is not None:
+                                images_with_regions.append((image, (region.x, region.y, region.width, region.height), region.cell_id))
+                    else:
+                        # 폴백: 기존 방식
+                        monitor = sct.monitors[1]  # 주 모니터
+                        full_screenshot = sct.grab(monitor)
+                        full_image = np.array(full_screenshot)
+                        
+                        # 각 셀 영역 자르기
+                        for cell in active_cells[:batch_size]:
+                            try:
+                                x, y, w, h = cell.ocr_area
+                                
+                                # 화면 경계 체크
+                                if x < 0 or y < 0 or x + w > full_image.shape[1] or y + h > full_image.shape[0]:
                                     continue
-                                else:
-                                    print(f"   [CHANGE] 셀 {cell.id}: 변화 감지됨 - OCR 실행")
+                                
+                                # 디버그: 첫 루프에서만 출력
+                                if loop_count == 1:
+                                    print(f"   셀 {cell.id}: 영역 ({x}, {y}, {w}, {h})")
+                                
+                                # 셀 상태 업데이트 - 캡처 중
+                                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                self.cell_status_signal.emit(cell.id, "캡처 중", timestamp)
+                                
+                                # 영역 자르기
+                                image = full_image[y:y+h, x:x+w].copy()
+                                
+                                region = (x, y, w, h)
+                                images_with_regions.append((image, region, cell.id))
+                                
+                                # 디버그: 첫 루프에서만 출력
+                                if loop_count == 1:
+                                    print(f"   [OK] 셀 {cell.id}: 캡처 완료 ({image.shape})")
                             
-                            region = (x, y, w, h)
-                            images_with_regions.append((image, region, cell.id))
-                            
-                            # 디버그 이미지 저장 비활성화 (화면 깜빡임 방지)
-                            # if len(images_with_regions) == 1:
-                            #     import cv2
-                            #     debug_filename = f"debug_capture_{cell.id}_{int(time.time())}.png"
-                            #     cv2.imwrite(debug_filename, cv2.cvtColor(image, cv2.COLOR_BGRA2BGR))
-                            #     print(f"   [CAMERA] 디버그 이미지 저장: {debug_filename}")
-                            
-                            print(f"   [OK] 셀 {cell.id}: 캡처 완료 ({image.shape})")
-                            
-                        except Exception as e:
-                            print(f"   [FAIL] 스크린샷 오류 {cell.id}: {e}")
+                            except Exception as e:
+                                print(f"   [FAIL] 스크린샷 오류 {cell.id}: {e}")
                     
-                    print(f"캡처 완료: {len(images_with_regions)}개 이미지 (변화 감지로 {batch_size - len(images_with_regions)}개 스킵)")
+                    # 디버그: 첫 루프 또는 이미지가 있을 때만 출력
+                    if loop_count == 1 or len(images_with_regions) > 0:
+                        print(f"[LOOP {loop_count}] 캡처 완료: {len(images_with_regions)}개 이미지")
                     
                     # 스크린 캡처 시간 기록
                     if self.perf_monitor:
                         capture_time = (time.time() - capture_start) * 1000
                         self.perf_monitor.record_capture_latency(capture_time)
                     
-                    # 강제 디버그 출력
-                    print("[SEARCH] OCR 처리 시작!")
+                    # OCR 처리가 필요한 경우에만
+                    if len(images_with_regions) > 0:
+                        ocr_start_time = time.time()
+                        print(f"[LOOP {loop_count}] OCR 처리 시작! ({len(images_with_regions)}개 이미지)")
                     
-                    # 배치 OCR 처리 (개별 처리로 변경)
+                    # 병렬 OCR 처리
                     ocr_results = []
-                    print(f"[SEARCH] OCR 처리할 이미지 수: {len(images_with_regions)}")
-                    for image, region, cell_id in images_with_regions:
-                        try:
-                            # EnhancedOCRService의 perform_ocr_with_recovery 사용
-                            result = self.ocr_engine.ocr_service.perform_ocr_with_recovery(image, cell_id)
-                            ocr_results.append(result)
-                        except Exception as e:
-                            print(f"OCR 처리 오류 ({cell_id}): {e}")
-                            ocr_results.append(None)
+                    
+                    # 배치 OCR 사용 (병렬 처리)
+                    if hasattr(self.ocr_engine.ocr_service, 'perform_batch_ocr'):
+                        batch_images = [(img, cell_id) for img, _, cell_id in images_with_regions]
+                        batch_results = self.ocr_engine.ocr_service.perform_batch_ocr(batch_images)
+                        ocr_results = batch_results  # 이미 OCRResult 객체들
+                    else:
+                        # 폴백: 개별 처리
+                        for image, region, cell_id in images_with_regions:
+                            try:
+                                # 셀 상태 업데이트 - OCR 처리 중
+                                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                self.cell_status_signal.emit(cell_id, "OCR 처리 중", timestamp)
+                                
+                                result = self.ocr_engine.ocr_service.perform_ocr_with_recovery(image, cell_id)
+                                ocr_results.append(result)
+                            except Exception as e:
+                                print(f"OCR 처리 오류 ({cell_id}): {e}")
+                                ocr_results.append(None)
+                    
+                    # OCR 처리 시간 측정
+                    if len(images_with_regions) > 0:
+                        ocr_time = time.time() - ocr_start_time
+                        print(f"[LOOP {loop_count}] OCR 완료! 소요시간: {ocr_time:.2f}초")
                     
                     # 감지된 결과 리스트
                     detection_results = []
@@ -471,17 +537,21 @@ class RealTimeMonitoringThread(QThread):
                         if self.test_mode:
                             print(f"테스트 모드 활성 - 대상 셀: {self.test_cell_id}")
                         
-                        # 안전한 인덱스 처리
-                        min_len = min(len(ocr_results), len(active_cells))
-                        
-                        for i in range(min_len):
-                            ocr_result = ocr_results[i]
-                            cell = active_cells[i]
+                        # 안전한 인덱스 처리 - images_with_regions와 매핑
+                        for i, (ocr_result, (image, region, cell_id)) in enumerate(zip(ocr_results, images_with_regions)):
+                            # cell_id로 실제 cell 찾기
+                            cell = next((c for c in active_cells if c.id == cell_id), None)
+                            if not cell:
+                                continue
                             
                             # 모든 OCR 결과를 콘솔에 출력
                             if ocr_result:
                                 if ocr_result.text:
                                     print(f"셀 {cell.id}: '{ocr_result.text}' (신뢰도: {ocr_result.confidence:.2f})")
+                                    
+                                    # 셀 상태 업데이트 - 텍스트 감지
+                                    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                    self.cell_status_signal.emit(cell.id, f"텍스트: {ocr_result.text[:30]}", timestamp)
                                     
                                     # 디버그 정보 출력 - 테스트 모드가 아니어도 항상 출력
                                     if hasattr(ocr_result, 'debug_info'):
@@ -517,6 +587,10 @@ class RealTimeMonitoringThread(QThread):
                                     print(f"[SEARCH] OCR 서비스 체크 결과: {ocr_check}")
                                     
                                     if trigger_found or ocr_check:
+                                        # 셀 상태 업데이트 - 트리거 감지
+                                        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                        self.cell_status_signal.emit(cell.id, f"트리거 감지! → 자동화", timestamp)
+                                        
                                         detection_result = DetectionResult(
                                             cell=cell,
                                             text=ocr_result.text,
@@ -540,10 +614,16 @@ class RealTimeMonitoringThread(QThread):
                                             print(f"   정규화 텍스트: '{ocr_result.normalized_text}'")
                                 else:
                                     print(f"⭕ 셀 {cell.id}: 텍스트 없음")
+                                    # 셀 상태 업데이트 - 텍스트 없음
+                                    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                    self.cell_status_signal.emit(cell.id, "대기 중", timestamp)
                                     if self.test_mode and hasattr(ocr_result, 'debug_info'):
                                         print(f"   ℹ️ 디버그: {ocr_result.debug_info}")
                             else:
                                 print(f"[FAIL] 셀 {cell.id}: OCR 결과 없음 (None)")
+                                # 셀 상태 업데이트 - OCR 실패
+                                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                                self.cell_status_signal.emit(cell.id, "대기 중", timestamp)
                         
                         print(f"=== 스캔 완료 ===\n")
                                 
@@ -572,10 +652,14 @@ class RealTimeMonitoringThread(QThread):
                         print(f"   신뢰도: {result.confidence:.2f}")
                         print(f"[LAUNCH][LAUNCH][LAUNCH] 액션 실행 예정! [LAUNCH][LAUNCH][LAUNCH]")
                     
-                    # 주기 조절
+                    # 주기 조절 (config에서 설정값 사용)
                     elapsed = time.time() - start_time
-                    if elapsed < 0.5:
-                        time.sleep(0.5 - elapsed)
+                    if loop_count % 10 == 0:
+                        print(f"[LOOP {loop_count}] 전체 루프 시간: {elapsed:.2f}초")
+                    
+                    ocr_interval = self.services.config_manager.get('ocr_interval_sec', 0.2)
+                    if elapsed < ocr_interval:
+                        time.sleep(ocr_interval - elapsed)
                         
                 except Exception as e:
                     error_msg = f"모니터링 오류: {str(e)[:100]}"
@@ -932,13 +1016,34 @@ class UnifiedChatbotGUI(QWidget):
         overlay_group.setLayout(overlay_layout)
         main_tab_layout.addWidget(overlay_group)
         
-        # 로그 영역
+        # 로그 영역 (개선된 버전)
         log_group = QGroupBox("실시간 로그")
         log_layout = QVBoxLayout()
         
+        # 셀 상태 테이블 추가
+        cell_status_label = QLabel("📡 셀별 실시간 상태:")
+        cell_status_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        log_layout.addWidget(cell_status_label)
+        
+        self.cell_status_table = QTableWidget()
+        self.cell_status_table.setColumnCount(4)
+        self.cell_status_table.setHorizontalHeaderLabels(["셀 ID", "시간", "상태", "감지 텍스트"])
+        self.cell_status_table.horizontalHeader().setStretchLastSection(True)
+        self.cell_status_table.setMaximumHeight(200)
+        self.cell_status_table.setAlternatingRowColors(True)
+        log_layout.addWidget(self.cell_status_table)
+        
+        # 셀 상태 딕셔너리 초기화
+        self.cell_status_dict = {}
+        
+        # 일반 로그
+        general_log_label = QLabel("📋 시스템 로그:")
+        general_log_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        log_layout.addWidget(general_log_label)
+        
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(400)
+        self.log_text.setMaximumHeight(200)
         log_layout.addWidget(self.log_text)
         
         log_group.setLayout(log_layout)
@@ -1168,6 +1273,11 @@ class UnifiedChatbotGUI(QWidget):
         self.monitoring_thread.automation_signal.connect(self.on_automation)
         self.monitoring_thread.status_signal.connect(self.on_status_update)
         self.monitoring_thread.performance_signal.connect(self.on_performance_update)
+        
+        # 셀 상태 시그널 연결 (존재하는 경우만)
+        if hasattr(self.monitoring_thread, 'cell_status_signal'):
+            self.monitoring_thread.cell_status_signal.connect(lambda cell_id, status, timestamp: 
+                self.update_cell_status(cell_id, status, timestamp))
         self.monitoring_thread.start()
         
         self.status_label.setText("실시간 모니터링 중...")
@@ -1363,17 +1473,78 @@ class UnifiedChatbotGUI(QWidget):
         self.log("[OK] 설정을 적용했습니다.")
     
     def log(self, message):
-        """로그 추가"""
-        timestamp = time.strftime("%H:%M:%S")
+        """로그 추가 (밀리초 포함)"""
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]  # 밀리초까지만
         self.log_text.append(f"[{timestamp}] {message}")
         
         # 로그 크기 제한 (QTextCursor 사용 최소화)
-        if self.log_text.document().lineCount() > 1000:
+        if self.log_text.document().lineCount() > 500:
             # 간단한 방법으로 텍스트 제한
             text = self.log_text.toPlainText()
             lines = text.split('\n')
-            if len(lines) > 900:
-                self.log_text.setPlainText('\n'.join(lines[-900:]))
+            if len(lines) > 400:
+                self.log_text.setPlainText('\n'.join(lines[-400:]))
+    
+    def update_cell_status(self, cell_id: str, status: str, timestamp: str = None):
+        """셀 상태 테이블 업데이트"""
+        if not self.cell_status_table:
+            return
+            
+        if timestamp is None:
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        
+        # 텍스트 추출 (상태에서)
+        text = ""
+        if ":" in status:
+            parts = status.split(":", 1)
+            if len(parts) > 1:
+                text = parts[1].strip()[:50]  # 50자까지만
+                status = parts[0].strip()
+        
+        # 딕셔너리에 상태 저장
+        self.cell_status_dict[cell_id] = {
+            'timestamp': timestamp,
+            'status': status,
+            'text': text
+        }
+        
+        # 테이블 업데이트
+        self.refresh_cell_status_table()
+    
+    def refresh_cell_status_table(self):
+        """셀 상태 테이블 새로고침"""
+        if not self.cell_status_table:
+            return
+            
+        # 테이블 초기화
+        self.cell_status_table.setRowCount(len(self.cell_status_dict))
+        
+        # 셀 ID로 정렬
+        sorted_cells = sorted(self.cell_status_dict.items(), 
+                            key=lambda x: (x[0].split('_')[0], int(x[0].split('_')[1]) if '_' in x[0] else 0))
+        
+        for row, (cell_id, data) in enumerate(sorted_cells):
+            self.cell_status_table.setItem(row, 0, QTableWidgetItem(cell_id))
+            self.cell_status_table.setItem(row, 1, QTableWidgetItem(data['timestamp']))
+            self.cell_status_table.setItem(row, 2, QTableWidgetItem(data['status']))
+            self.cell_status_table.setItem(row, 3, QTableWidgetItem(data['text']))
+            
+            # 상태에 따라 색상 설정
+            if '트리거' in data['status']:
+                for col in range(4):
+                    item = self.cell_status_table.item(row, col)
+                    if item:
+                        item.setBackground(QColor(255, 200, 200))  # 연한 빨간색
+            elif 'OCR' in data['status']:
+                for col in range(4):
+                    item = self.cell_status_table.item(row, col)
+                    if item:
+                        item.setBackground(QColor(200, 255, 200))  # 연한 초록색
+            elif '자동화' in data['status']:
+                for col in range(4):
+                    item = self.cell_status_table.item(row, col)
+                    if item:
+                        item.setBackground(QColor(200, 200, 255))  # 연한 파란색
     
     def on_performance_update(self, metrics):
         """성능 메트릭 업데이트"""
@@ -1429,6 +1600,11 @@ class UnifiedChatbotGUI(QWidget):
         self.stop_monitoring()
         if self.overlay:
             self.overlay.close()
+        
+        # 초고속 캡처 엔진 종료
+        if self.monitoring_thread and hasattr(self.monitoring_thread, 'ultra_fast_capture'):
+            if self.monitoring_thread.ultra_fast_capture:
+                self.monitoring_thread.ultra_fast_capture.shutdown()
         
         # 성능 모니터 및 캐시 정리
         self.perf_monitor.stop()

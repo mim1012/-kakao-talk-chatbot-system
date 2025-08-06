@@ -10,7 +10,7 @@ from typing import Any
 from dataclasses import dataclass, field
 from enum import StrEnum
 import screeninfo
-from core.config_manager import ConfigManager
+from src.core.config_manager import ConfigManager
 
 
 class CellStatus(StrEnum):

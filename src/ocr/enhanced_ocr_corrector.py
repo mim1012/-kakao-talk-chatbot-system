@@ -255,6 +255,10 @@ class EnhancedOCRCorrector:
         self.ocr_corrections[error_text] = correct_text
         self.logger.info(f"사용자 정의 보정 추가: '{error_text}' -> '{correct_text}'")
     
+    def correct_text(self, text: str) -> str:
+        """텍스트 보정 (호환성을 위한 별칭 메서드)"""
+        return self.apply_direct_corrections(text)
+    
     def get_correction_stats(self) -> dict[str, int]:
         """보정 통계 반환"""
         return {

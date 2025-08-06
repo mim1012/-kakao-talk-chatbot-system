@@ -1,28 +1,30 @@
 {
   "grid_rows": 3,
   "grid_cols": 5,
-  "ocr_interval_sec": 0.5,
+  "ocr_interval_sec": 0.2,
   "fast_ocr_mode": true,
   "parallel_processing": {
-    "enabled": false,
+    "enabled": true,
     "capture_workers": 4,
     "ocr_workers": 4,
     "zone_count": 3,
     "comment": "병렬 처리 설정 (실험적 기능)"
   },
   "cooldown_sec": 5,
-  "ocr_scale": 2.0,
+  "ocr_scale": 1.5,
   "trigger_patterns": ["들어왔습니다"],
   "use_regex_trigger": true,
   "regex_patterns": [".*들어왔습니다.*"],
   "monitor_mode": "all",
+  "use_gpu": true,
+  "gpu_memory_fraction": 0.3,
   "use_easyocr": false,
   "easyocr_languages": [
     "ko"
   ],
   "require_min_triggers": 1,
   "ocr_preprocess": {
-    "scale": 2.0,
+    "scale": 1.5,
     "adaptive_thresh_blocksize": 11,
     "adaptive_thresh_C": 2,
     "use_morph_close": true,
@@ -30,7 +32,7 @@
     "invert": true,
     "gaussian_blur": false,
     "contrast_enhance": true,
-    "simple_mode": false
+    "simple_mode": true
   },
   "ocr_options": {
     "lang": "kor",
@@ -101,7 +103,13 @@
       "ocr_h": 600
     }
   ],
-  "ocr_max_workers": 6,
+  "ocr_max_workers": 8,
+  "paddle_ocr_config": {
+    "text_recognition_batch_size": 8,
+    "textline_orientation_batch_size": 8,
+    "enable_hpi": true,
+    "use_tensorrt": false
+  },
   "require_input_keyword": false,
   "ui_constants": {
     "ocr_area_y_offset": 80,
@@ -128,8 +136,8 @@
     "max_retries": 3,
     "clipboard_retry_count": 5,
     "input_position_fallback_offset": 50,
-    "cells_per_cycle": 15,
+    "cells_per_cycle": 30,
     "enable_batch_processing": true,
-    "max_concurrent_ocr": 4
+    "max_concurrent_ocr": 8
   }
 }

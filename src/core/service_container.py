@@ -9,10 +9,10 @@ import queue
 import threading
 import numpy as np
 from typing import Any
-from core.config_manager import ConfigManager
-from ocr.enhanced_ocr_service import EnhancedOCRService
-from automation.automation_service import AutomationService, DefaultInputManager, DefaultClipboardManager
-from core.grid_manager import GridManager, GridCell, CellStatus
+from src.core.config_manager import ConfigManager
+from src.ocr.base_ocr_service import OCRServiceFactory, BaseOCRService
+from src.automation.automation_service import AutomationService, DefaultInputManager, DefaultClipboardManager
+from src.core.grid_manager import GridManager, GridCell, CellStatus
 
 
 class ServiceContainer:
@@ -24,7 +24,9 @@ class ServiceContainer:
         
         # Initialize services in dependency order
         self._config_manager = ConfigManager(config_path)
-        self._ocr_service = EnhancedOCRService(self._config_manager)
+        # OCR 서비스 팩토리를 통한 생성 (폴백 없음)
+        self._ocr_service = OCRServiceFactory.create_service(self._config_manager)
+        self.logger.info(f"OCR 서비스 생성됨: {self._ocr_service.__class__.__name__}")
         self._input_manager = DefaultInputManager(self._config_manager)
         self._clipboard_manager = DefaultClipboardManager(self._config_manager)
         self._automation_service = AutomationService(
@@ -49,7 +51,7 @@ class ServiceContainer:
         return self._config_manager
     
     @property
-    def ocr_service(self) -> EnhancedOCRService:
+    def ocr_service(self) -> BaseOCRService:
         """Get the OCR service."""
         return self._ocr_service
     

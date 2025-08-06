@@ -102,15 +102,40 @@ class ImageCache:
         key = self._compute_image_hash(original)
         size = self._estimate_size(processed)
         
-        # 크기 제한 확인
+        # 크기 제한 확인 및 점진적 제거
         if self.current_size_bytes + size > self.max_size_bytes:
-            self.logger.info("이미지 캐시 크기 제한 도달, 오래된 항목 제거")
-            # 간단한 구현: 전체 캐시 클리어
-            self.clear()
+            self.logger.info("이미지 캐시 크기 제한 도달, 점진적 제거 시작")
+            self._evict_progressive(target_reduction=0.3)  # 30% 제거
         
         self.cache.put(key, processed)
         self.current_size_bytes += size
     
+    def _evict_progressive(self, target_reduction: float = 0.3):
+        """점진적 캐시 제거 - 전체 삭제 대신 일부만 제거"""
+        if not self.cache.cache:
+            return
+            
+        with self.cache.lock:
+            # 제거할 항목 수 계산
+            current_count = len(self.cache.cache)
+            items_to_remove = max(1, int(current_count * target_reduction))
+            
+            # 가장 오래된 항목부터 제거 (LRU 순서)
+            removed_size = 0
+            for _ in range(items_to_remove):
+                if not self.cache.cache:
+                    break
+                    
+                # 가장 오래된 항목 제거
+                key, (value, _) = self.cache.cache.popitem(last=False)
+                if isinstance(value, np.ndarray):
+                    removed_size += value.nbytes
+            
+            # 현재 크기 업데이트
+            self.current_size_bytes = max(0, self.current_size_bytes - removed_size)
+            
+            self.logger.info(f"점진적 캐시 제거 완료: {items_to_remove}개 항목, {removed_size/1024/1024:.1f}MB 절약")
+
     def clear(self):
         """캐시 초기화"""
         self.cache.clear()

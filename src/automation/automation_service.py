@@ -9,7 +9,7 @@ import logging
 import pyautogui
 import pyperclip
 import time
-from typing import Protocol
+from typing import Protocol, Optional
 from core.config_manager import ConfigManager
 
 
@@ -195,8 +195,27 @@ class AutomationService:
     
     def execute_message_input(self, 
                             position: tuple[int, int], 
-                            message: str) -> AutomationResult:
-        """Execute the complete message input sequence."""
+                            message: str,
+                            cell_id: Optional[str] = None) -> AutomationResult:
+        """Execute the complete message input sequence with throttling.
+        
+        Args:
+            position: Input position
+            message: Message to send
+            cell_id: Cell ID for throttling
+        """
+        # Import here to avoid circular dependency
+        from automation.response_throttler import get_throttler
+        
+        # Check throttling
+        if cell_id:
+            throttler = get_throttler()
+            if not throttler.can_respond(cell_id):
+                remaining = throttler.get_cooldown_remaining(cell_id)
+                return AutomationResult(
+                    False, 
+                    f"Cooldown active ({remaining:.1f}s remaining)"
+                )
         try:
             # Step 1: Move to position and click
             if not self.input_manager.move_to(position):
@@ -236,6 +255,11 @@ class AutomationService:
                 return AutomationResult(False, "Failed to send message")
             
             time.sleep(self.config.timing_config.send_delay)
+            
+            # Record response for throttling
+            if cell_id:
+                throttler.record_response(cell_id)
+                self.logger.info(f"Response recorded for cell {cell_id}")
             
             return AutomationResult(True, "Message sent successfully")
             

@@ -176,6 +176,12 @@ class EnhancedOCRService:
             if self.debug_mode:
                 self.logger.info(f"결과 파싱 시작 - 결과 수: {len(results)}")
             
+            # None 결과 처리
+            if results[0] is None:
+                if self.debug_mode:
+                    self.logger.debug("OCR 결과가 None입니다 (텍스트 없음)")
+                return []
+            
             # PaddleX 새로운 딕셔너리 형식 처리 (v3.1.0+)
             if isinstance(results[0], dict) and 'rec_texts' in results[0] and 'rec_scores' in results[0]:
                 rec_texts = results[0]['rec_texts']
@@ -205,7 +211,7 @@ class EnhancedOCRService:
                             self.logger.info(f"추출된 텍스트: '{text}' (신뢰도: {confidence:.2f})")
             else:
                 if self.debug_mode:
-                    self.logger.warning(f"알 수 없는 결과 형식: {type(results[0])}")
+                    self.logger.debug(f"알 수 없는 결과 형식: {type(results[0])}")
             
             if self.debug_mode:
                 self.logger.info(f"최종 추출된 텍스트 수: {len(text_confidence_pairs)}")
@@ -276,62 +282,18 @@ class EnhancedOCRService:
                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
                 self.logger.debug(f"Converted RGBA to RGB for {cell_id}")
             
-            # Strategy 1: Original image (for already clear text)
-            preprocessed_images.append(image.copy())
-            
+            # 단일 전략: 간단한 전처리만 사용 (빠른 처리)
             # Convert to grayscale if needed  
             if len(image.shape) == 3:
                 gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             else:
                 gray = image.copy()
             
-            # Strategy 2: Aggressive upscaling for Korean text
-            height, width = gray.shape
-            # 더 적극적인 확대 - 카카오톡 텍스트는 보통 작음
-            min_width, min_height = 600, 200  # 최소 크기 증가
-            if width < min_width or height < min_height:
-                scale_factor = max(min_width / width, min_height / height, 3.0)  # 최소 3배 확대
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
-                upscaled = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-                
-                # 대비 향상
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                enhanced = clahe.apply(upscaled)
-                
-                # Sharpen
-                kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-                sharpened = cv2.filter2D(enhanced, -1, kernel)
-                preprocessed_images.append(sharpened)
-                
-                if self.debug_mode:
-                    self.logger.info(f"이미지 확대: {width}x{height} → {new_width}x{new_height} (x{scale_factor:.1f})")
+            # 스케일링 비활성화 (원본 이미지 사용)
+            # 스케일링이 OCR 속도를 크게 저하시킴
+            preprocessed_images.append(gray)  # 그레이스케일만 적용
             
-            # Strategy 3: Adaptive threshold with different parameters
-            for block_size in [11, 15]:
-                for C in [2, 5]:
-                    try:
-                        binary = cv2.adaptiveThreshold(
-                            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                            cv2.THRESH_BINARY, block_size, C
-                        )
-                        preprocessed_images.append(binary)
-                        
-                        # Also try inverted
-                        inverted = cv2.bitwise_not(binary)
-                        preprocessed_images.append(inverted)
-                    except:
-                        continue
-            
-            # Strategy 4: OTSU thresholding
-            _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            preprocessed_images.append(otsu)
-            
-            # Strategy 5: Contrast enhancement
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            enhanced = clahe.apply(gray)
-            preprocessed_images.append(enhanced)
-            
+            # 추가 전략 비활성화 - 단일 전략만 사용
             # Debug image saving disabled to prevent clutter
             
             return preprocessed_images
@@ -376,29 +338,24 @@ class EnhancedOCRService:
             all_results = []
             trigger_results = []  # 트리거 패턴이 포함된 결과들
             
-            # Try OCR on each preprocessed image
-            for i, processed_img in enumerate(preprocessed_images):
+            # 단일 이미지만 처리 (첫 번째 전처리된 이미지만 사용)
+            if preprocessed_images:
+                processed_img = preprocessed_images[0]  # 첫 번째 이미지만 사용
                 try:
                     # Use PaddleOCR (EasyOCR disabled)
                     if self.debug_mode:
-                        self.logger.info(f"PaddleOCR 실행 중 - {cell_id} Strategy {i}")
+                        self.logger.info(f"PaddleOCR 실행 중 - {cell_id}")
                     
                     results = self.paddle_ocr.ocr(processed_img)
                     
                     if self.debug_mode:
-                        self.logger.info(f"PaddleOCR 결과 - {cell_id} Strategy {i}: {len(results) if results else 0}개 결과")
+                        self.logger.info(f"PaddleOCR 결과 - {cell_id}: {len(results) if results else 0}개 결과")
                         if results:
                             self.logger.info(f"결과 타입: {type(results)}, 첫 번째 결과: {type(results[0]) if results else 'None'}")
                     
                     if results and len(results) > 0:
                         # 통합된 결과 처리 (EasyOCR/PaddleOCR 모두 지원)
                         text_confidence_pairs = self._extract_text_confidence(results)
-                        
-                        # 모든 감지된 텍스트 로그 출력
-                        if text_confidence_pairs:
-                            print(f"\n🔍 [OCR 감지] Strategy {i} - {len(text_confidence_pairs)}개 텍스트 발견:")
-                            for idx, (t, c) in enumerate(text_confidence_pairs):
-                                print(f"   [{idx}] '{t}' (신뢰도: {c:.2f})")
                         
                         for j, (text, confidence) in enumerate(text_confidence_pairs):
                                 # 로그 텍스트 필터링
@@ -409,12 +366,12 @@ class EnhancedOCRService:
                                 
                                 # Log only high confidence detections in debug mode
                                 if self.debug_mode and confidence > 0.7:
-                                    self.logger.debug(f"{cell_id} Strategy {i}: '{text}' (conf: {confidence:.2f})")
+                                    self.logger.debug(f"{cell_id}: '{text}' (conf: {confidence:.2f})")
                                 
                                 all_results.append({
                                     'text': text,
                                     'confidence': confidence,
-                                    'strategy': i
+                                    'strategy': 0
                                 })
                                 
                                 # Update best result
@@ -444,11 +401,12 @@ class EnhancedOCRService:
                                         confidence, 
                                         position,
                                         debug_info={
-                                            'strategy': i,
+                                            'strategy': 0,
                                             'all_results': all_results
                                         }
                                     )
-                        else:
+                        # 아래 블록은 비활성화 (위에서 이미 처리됨)
+                        if False:
                             # 기존 형식 처리 (리스트 형식)
                             for detection in results[0]:
                                 if detection[1]:  # Has text result
@@ -463,12 +421,12 @@ class EnhancedOCRService:
                                     
                                     # Log only high confidence detections in debug mode
                                     if self.debug_mode and confidence > 0.7:
-                                        self.logger.debug(f"{cell_id} Strategy {i}: '{text}' (conf: {confidence:.2f})")
+                                        self.logger.debug(f"{cell_id}: '{text}' (conf: {confidence:.2f})")
                                     
                                     all_results.append({
                                         'text': text,
                                         'confidence': confidence,
-                                        'strategy': i
+                                        'strategy': 0
                                     })
                                     
                                     # Update best result
@@ -492,14 +450,13 @@ class EnhancedOCRService:
                                             confidence, 
                                             position,
                                             debug_info={
-                                                'strategy': i,
+                                                'strategy': 0,
                                                 'all_results': all_results
                                             }
                                         )
                                     
                 except Exception as e:
-                    self.logger.debug(f"OCR failed on strategy {i}: {e}")
-                    continue
+                    self.logger.debug(f"OCR failed: {e}")
             
             # 트리거 패턴이 있는 결과를 우선 확인
             best_trigger_result = None
