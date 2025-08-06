@@ -208,7 +208,19 @@ class MonitorManager:
         logger.info(f"총 {len(self.grid_cells)}개의 그리드 셀이 초기화되었습니다.")
     
     def _load_response_messages(self):
-        """CSV에서 응답 메시지 로드"""
+        """CSV에서 응답 메시지 로드 또는 config.json에서 가져오기"""
+        
+        # config.json에서 응답 메시지 확인
+        config_response = self.config.get("response_message")
+        if config_response:
+            # config.json의 응답 메시지 사용
+            self.response_messages = [
+                {"trigger_pattern": "들어왔", "response_message": config_response, "category": "welcome"},
+                {"trigger_pattern": "들어왔습니다", "response_message": config_response, "category": "welcome"}
+            ]
+            logger.info(f"config.json에서 응답 메시지를 로드했습니다.")
+            return
+        
         csv_path = self.config.get("csv_path", "response_messages.csv")
         
         if not os.path.exists(csv_path):
@@ -266,9 +278,9 @@ class MonitorManager:
             logger.info(f"CSV에서 메시지 선택: '{selected_msg}'")
             return selected_msg
         
-        # 기본 메시지
-        default_msg = "환영합니다! 😊"
-        logger.info(f"기본 메시지 사용: '{default_msg}'")
+        # 기본 메시지 (config.json에서 가져오거나 하드코딩된 기본값 사용)
+        default_msg = self.config.get("response_message", "환영합니다! 😊")
+        logger.info(f"기본 메시지 사용: '{default_msg[:50]}...'")  # 처음 50자만 로그에 표시
         return default_msg
     
     def start(self):

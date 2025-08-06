@@ -779,9 +779,9 @@ class RealTimeMonitoringThread(QThread):
             
             print(f"      클릭 완료")
             
-            # 텍스트 입력
-            response = "어서오세요! 환영합니다"
-            print(f"   응답 입력: '{response}'")
+            # 텍스트 입력 (설정에서 가져오기)
+            response = self.services.config_manager.get('response_message', "어서오세요! 환영합니다")
+            print(f"   응답 입력: '{response[:50]}...'")  # 처음 50자만 로그에 표시
             pyperclip.copy(response)
             
             # 텍스트 전송 - PyAutoGUI 사용
