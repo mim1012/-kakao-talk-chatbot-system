@@ -14,18 +14,24 @@ from typing import NoReturn
 
 # Set environment variables before any imports
 os.environ['PPOCR_LOG_LEVEL'] = 'ERROR'
-os.environ['PADDLEX_LOG_LEVEL'] = 'ERROR'
 os.environ['PADDLE_LOG_LEVEL'] = 'ERROR'
 os.environ['PADDLEOCR_SHOW_PROGRESS'] = '0'
-os.environ['PADDLEX_SHOW_PROGRESS'] = '0'
 os.environ['TQDM_DISABLE'] = '1'
 os.environ['GLOG_v'] = '0'
 os.environ['GLOG_logtostderr'] = '0'
 os.environ['GLOG_minloglevel'] = '3'
 os.environ['FLAGS_logtostderr'] = '0'
+# PyInstaller 환경에서 paddlex 무시
+if getattr(sys, 'frozen', False):
+    os.environ['PADDLEOCR_ENABLE_PADDLEX'] = '0'
 
-# Set UTF-8 encoding for stdout
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# Set UTF-8 encoding for stdout (PyInstaller compatibility)
+if hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+elif not isinstance(sys.stdout, io.TextIOWrapper):
+    # Fallback for PyInstaller
+    import locale
+    sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding=locale.getpreferredencoding())
 
 # Disable PaddleOCR logging and warnings
 import logging
@@ -41,7 +47,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 logging.getLogger('ppocr').setLevel(logging.CRITICAL)
 logging.getLogger('paddleocr').setLevel(logging.CRITICAL)
 logging.getLogger('paddle').setLevel(logging.CRITICAL)
-logging.getLogger('paddlex').setLevel(logging.CRITICAL)
 logging.getLogger('ppocr.PaddleOCR').setLevel(logging.CRITICAL)
 
 # Disable root logger for paddle

@@ -36,26 +36,10 @@ class OptimizedPaddleService(BaseOCRService):
                 self.logger.info("기존 PaddleOCR 인스턴스 재사용")
                 return True
             
-            # 최적화 설정으로 새 인스턴스 생성
+            # 최적화 설정으로 새 인스턴스 생성 (최소 설정)
             self.paddle_ocr = PaddleOCR(
                 lang='korean',
-                use_angle_cls=False,       # 각도 분류 비활성화
-                use_gpu=False,              # CPU 사용
-                enable_mkldnn=True,         # MKLDNN 활성화 (Intel CPU 최적화)
-                cpu_threads=2,              # CPU 스레드 제한
-                det_algorithm='DB',         # 빠른 텍스트 감지
-                det_db_thresh=0.5,          # 높은 임계값 (빠른 필터링)
-                det_db_box_thresh=0.6,      # 박스 임계값 증가
-                det_db_unclip_ratio=1.2,    # 언클립 비율 감소
-                det_limit_side_len=160,     # 매우 작은 이미지 제한
-                det_db_score_mode='fast',   # 빠른 스코어 모드
-                rec_batch_num=1,            # 작은 배치
-                max_text_length=15,         # 짧은 텍스트
-                rec_algorithm='CRNN',       # 빠른 인식
-                rec_image_shape='3, 32, 160',  # 작은 인식 이미지
-                use_space_char=False,       # 공백 비활성화
-                drop_score=0.3,             # 낮은 점수 드롭
-                show_log=False              # 로그 비활성화
+                use_angle_cls=False       # 각도 분류 비활성화
             )
             
             OptimizedPaddleService._shared_instance = self.paddle_ocr

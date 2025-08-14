@@ -37,7 +37,12 @@
       "Bash(grep:*)",
       "Bash(del debug_capture_*.png)",
       "Bash(git rm:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(copy config.json distconfig.json)",
+      "Bash(dir:*)",
+      "Bash(KakaoOCRChatbot.exe)",
+      "Bash(distKakaoOCRChatbot.exe)",
+      "Bash(pyinstaller:*)"
     ],
     "deny": []
   }
