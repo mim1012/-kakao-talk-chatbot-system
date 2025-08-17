@@ -440,8 +440,8 @@ class RealTimeMonitoringThread(QThread):
                             if image is not None:
                                 images_with_regions.append((image, (region.x, region.y, region.width, region.height), region.cell_id))
                     else:
-                        # 폴백: 기존 방식
-                        monitor = sct.monitors[1]  # 주 모니터
+                        # 폴백: 기존 방식 - 전체 화면 캡처 사용
+                        monitor = sct.monitors[0]  # 전체 화면 (모든 모니터 포함)
                         full_screenshot = sct.grab(monitor)
                         full_image = np.array(full_screenshot)
                         
@@ -450,8 +450,9 @@ class RealTimeMonitoringThread(QThread):
                             try:
                                 x, y, w, h = cell.ocr_area
                                 
-                                # 화면 경계 체크
+                                # 화면 경계 체크 (전체 화면 기준)
                                 if x < 0 or y < 0 or x + w > full_image.shape[1] or y + h > full_image.shape[0]:
+                                    print(f"   [SKIP] 셀 {cell.id}: 화면 경계 벗어남 ({x}, {y}, {w}, {h}) vs 화면 {full_image.shape}")
                                     continue
                                 
                                 # 디버그: 첫 루프에서만 출력
@@ -468,9 +469,25 @@ class RealTimeMonitoringThread(QThread):
                                 region = (x, y, w, h)
                                 images_with_regions.append((image, region, cell.id))
                                 
-                                # 디버그: 첫 루프에서만 출력
+                                # 디버그: 첫 루프에서만 출력 및 이미지 저장
                                 if loop_count == 1:
                                     print(f"   [OK] 셀 {cell.id}: 캡처 완료 ({image.shape})")
+                                    # 디버그용 이미지 저장
+                                    try:
+                                        import cv2
+                                        
+                                        # debug 폴더 생성
+                                        debug_dir = "debug"
+                                        os.makedirs(debug_dir, exist_ok=True)
+                                        
+                                        # 타임스탬프 추가 (이미 import된 datetime 사용)
+                                        timestamp = datetime.now().strftime("%H%M%S")
+                                        filename = f"{debug_dir}/capture_{cell.id}_{timestamp}.png"
+                                        
+                                        cv2.imwrite(filename, image)
+                                        print(f"   [DEBUG] 이미지 저장됨: {filename}")
+                                    except Exception as debug_e:
+                                        print(f"   [DEBUG ERROR] 이미지 저장 실패: {debug_e}")
                             
                             except Exception as e:
                                 print(f"   [FAIL] 스크린샷 오류 {cell.id}: {e}")
@@ -645,12 +662,16 @@ class RealTimeMonitoringThread(QThread):
                         )
                         
                         # 자동화 큐에 추가
-                        self.automation_queue.put(result)
-                        print(f"\n[LAUNCH][LAUNCH][LAUNCH] [자동화 큐 추가] [LAUNCH][LAUNCH][LAUNCH]")
-                        print(f"   셀: {result.cell.id}")
-                        print(f"   텍스트: '{result.text}'")
-                        print(f"   신뢰도: {result.confidence:.2f}")
-                        print(f"[LAUNCH][LAUNCH][LAUNCH] 액션 실행 예정! [LAUNCH][LAUNCH][LAUNCH]")
+                        try:
+                            self.automation_queue.put(result)
+                            print(f"\n🚀🚀🚀 [자동화 큐 추가 성공] 🚀🚀🚀")
+                            print(f"   셀: {result.cell.id}")
+                            print(f"   텍스트: '{result.text}'")
+                            print(f"   신뢰도: {result.confidence:.2f}")
+                            print(f"   큐 크기: {self.automation_queue.qsize()}")
+                            print(f"🚀🚀🚀 액션 실행 예정! 🚀🚀🚀")
+                        except Exception as queue_error:
+                            print(f"❌❌❌ 자동화 큐 추가 실패: {queue_error} ❌❌❌")
                     
                     # 주기 조절 (config에서 설정값 사용)
                     elapsed = time.time() - start_time
@@ -668,16 +689,18 @@ class RealTimeMonitoringThread(QThread):
     
     def _automation_worker(self):
         """자동화 처리 워커"""
-        print("자동화 워커 시작됨")
+        print("🤖🤖🤖 자동화 워커 시작됨 🤖🤖🤖")
         queue_check_count = 0
         while True:
             try:
-                # 큐 상태 확인 (10번마다 한 번씩)
+                # 큐 상태 확인 (5번마다 한 번씩)
                 queue_check_count += 1
-                if queue_check_count % 10 == 0:
-                    print(f"   큐 체크 중... (큐 크기: {self.automation_queue.qsize()})")
+                if queue_check_count % 5 == 0:
+                    current_size = self.automation_queue.qsize()
+                    print(f"🔍 자동화 큐 체크 중... (큐 크기: {current_size})")
                 
                 result = self.automation_queue.get(timeout=1)
+                print(f"🎯🎯🎯 자동화 큐에서 항목 받음! 🎯🎯🎯")
                 print(f"\n💥💥💥 [자동화 실행 시작] 💥💥💥")
                 print(f"자동화 대상: {result.cell.id} - '{result.text}'")
                 print(f"   DetectionResult 정보:")
@@ -972,10 +995,18 @@ class UnifiedChatbotGUI(QWidget):
         
         self.test_cell_combo = QComboBox()
         self.test_cell_combo.setEnabled(False)
-        # 셀 목록 추가 (3x5 그리드)
-        for row in range(3):
-            for col in range(5):
-                self.test_cell_combo.addItem(f"셀 [{row},{col}] - monitor_0_cell_{row}_{col}")
+        
+        # 실제 생성된 모든 셀을 드롭다운에 추가
+        for cell in self.services.grid_manager.cells:
+            # 셀 ID에서 정보 추출
+            parts = cell.id.split('_')
+            if len(parts) >= 4:
+                monitor_idx = parts[1]
+                row = parts[3]
+                col = parts[4]
+                self.test_cell_combo.addItem(f"Monitor {monitor_idx} 셀 [{row},{col}] - {cell.id}")
+            else:
+                self.test_cell_combo.addItem(f"{cell.id}")
         
         cell_select_layout.addWidget(self.test_cell_combo)
         test_layout.addLayout(cell_select_layout)
@@ -1262,12 +1293,16 @@ class UnifiedChatbotGUI(QWidget):
         # 테스트 모드 설정 전달
         if self.test_mode_checkbox.isChecked():
             selected_idx = self.test_cell_combo.currentIndex()
-            row = selected_idx // 5
-            col = selected_idx % 5
-            test_cell_id = f"monitor_0_cell_{row}_{col}"
-            self.monitoring_thread.test_mode = True
-            self.monitoring_thread.test_cell_id = test_cell_id
-            self.log(f"테스트 모드로 시작: {test_cell_id}만 감지")
+            if 0 <= selected_idx < len(self.services.grid_manager.cells):
+                # 실제 셀 객체에서 ID 가져오기
+                test_cell = self.services.grid_manager.cells[selected_idx]
+                test_cell_id = test_cell.id
+                self.monitoring_thread.test_mode = True
+                self.monitoring_thread.test_cell_id = test_cell_id
+                self.log(f"테스트 모드로 시작: {test_cell_id}만 감지")
+            else:
+                self.log("테스트 모드: 유효하지 않은 셀 선택")
+                return
         
         self.monitoring_thread.detection_signal.connect(self.on_detection)
         self.monitoring_thread.automation_signal.connect(self.on_automation)

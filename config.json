@@ -1,7 +1,7 @@
 {
   "grid_rows": 3,
   "grid_cols": 5,
-  "ocr_interval_sec": 0.2,
+  "ocr_interval_sec": 0.5,
   "fast_ocr_mode": true,
   "parallel_processing": {
     "enabled": true,
@@ -25,15 +25,17 @@
   ],
   "require_min_triggers": 1,
   "ocr_preprocess": {
-    "scale": 1.5,
-    "adaptive_thresh_blocksize": 11,
-    "adaptive_thresh_C": 2,
+    "scale": 2.0,
+    "adaptive_thresh_blocksize": 15,
+    "adaptive_thresh_C": 3,
     "use_morph_close": true,
     "apply_sharpen": true,
-    "invert": true,
-    "gaussian_blur": false,
+    "invert": false,
+    "gaussian_blur": true,
     "contrast_enhance": true,
-    "simple_mode": true
+    "simple_mode": false,
+    "enable_denoising": true,
+    "bilateral_filter": true
   },
   "ocr_options": {
     "lang": "kor",

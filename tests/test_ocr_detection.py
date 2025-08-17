@@ -13,23 +13,54 @@ import mss
 from PyQt5.QtWidgets import QApplication
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from config_manager import ConfigManager
-from enhanced_ocr_service import EnhancedOCRService
-from grid_manager import GridManager, GridCell
+from core.config_manager import ConfigManager
+try:
+    from ocr.enhanced_ocr_service import EnhancedOCRService
+except ImportError:
+    from ocr.fast_ocr_adapter import FastOCRAdapter as EnhancedOCRService
+from grid.grid_manager import GridManager
 
 
-def create_test_image_with_text(text: str, width: int = 200, height: int = 50) -> np.ndarray:
-    """Create a test image with Korean text."""
-    # Create white background
-    img = np.ones((height, width, 3), dtype=np.uint8) * 255
-    
-    # Add text (using cv2.putText for testing - in real scenario would be actual Korean text)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(img, text, (10, 35), font, 1, (0, 0, 0), 2, cv2.LINE_AA)
-    
-    return img
+def create_test_image_with_text(text: str, width: int = 400, height: int = 100) -> np.ndarray:
+    """Create a test image with Korean text using PIL for better Korean support."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        
+        # Create PIL image
+        img = Image.new('RGB', (width, height), color=(255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            # Try to use Korean font
+            font = ImageFont.truetype("malgun.ttf", 24)
+        except:
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except:
+                font = ImageFont.load_default()
+        
+        # Calculate text position
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        x = (width - text_width) // 2
+        y = (height - text_height) // 2
+        
+        # Draw text
+        draw.text((x, y), text, fill=(0, 0, 0), font=font)
+        
+        # Convert to numpy array
+        return np.array(img)
+        
+    except ImportError:
+        # Fallback to OpenCV
+        img = np.ones((height, width, 3), dtype=np.uint8) * 255
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(img, text, (10, 35), font, 1, (0, 0, 0), 2, cv2.LINE_AA)
+        return img
 
 
 def test_ocr_service() -> None:
@@ -197,16 +228,84 @@ def test_specific_area() -> None:
                     print(f"   Strategy {r['strategy']}: '{r['text']}' (conf: {r['confidence']:.2f})")
 
 
+def test_trigger_patterns() -> None:
+    """Test trigger pattern detection with generated images."""
+    print("\n🎯 Trigger Pattern Detection Test")
+    print("=" * 60)
+    
+    # Import FastOCRAdapter
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+    from ocr.fast_ocr_adapter import FastOCRAdapter
+    from core.config_manager import ConfigManager
+    
+    # Initialize services
+    config = ConfigManager()
+    ocr_adapter = FastOCRAdapter(config)
+    
+    # Test phrases
+    test_phrases = [
+        "들어왔습니다",
+        "님이 들어왔습니다", 
+        "홍길동님이 들어왔습니다",
+        "들어왔",
+        "들머왔습니다",  # Common OCR error
+        "입장했습니다",
+        "참여했습니다",
+        "안녕하세요",  # Non-trigger
+        "안녕히가세요"  # Non-trigger
+    ]
+    
+    print(f"Testing {len(test_phrases)} phrases...")
+    
+    success_count = 0
+    total_count = len(test_phrases)
+    
+    for i, phrase in enumerate(test_phrases):
+        print(f"\n--- Test {i+1}: '{phrase}' ---")
+        
+        # Create test image
+        test_image = create_test_image_with_text(phrase)
+        
+        # Save test image
+        filename = f"test_trigger_{i+1}_{phrase.replace(' ', '_')}.png"
+        cv2.imwrite(f"debug_screenshots/{filename}", test_image)
+        print(f"Image saved: {filename}")
+        
+        # Perform OCR
+        result = ocr_adapter.perform_ocr_with_recovery(test_image, f"test_{i+1}")
+        
+        print(f"OCR Result:")
+        print(f"  Original: '{result.debug_info.get('original_text', '')}'")
+        print(f"  Corrected: '{result.text}'")
+        print(f"  Confidence: {result.confidence:.2f}")
+        
+        # Check trigger pattern
+        is_trigger = ocr_adapter.check_trigger_patterns(result)
+        print(f"  Trigger detected: {is_trigger}")
+        
+        # Expected result
+        expected_trigger = any(pattern in phrase for pattern in ["들어왔습니다", "들어왔", "입장", "참여"])
+        
+        if is_trigger == expected_trigger:
+            print(f"  ✅ PASS: Expected {expected_trigger}, got {is_trigger}")
+            success_count += 1
+        else:
+            print(f"  ❌ FAIL: Expected {expected_trigger}, got {is_trigger}")
+    
+    print(f"\n📊 Test Results: {success_count}/{total_count} passed ({success_count/total_count*100:.1f}%)")
+
+
 if __name__ == "__main__":
     # Create debug directory
     os.makedirs("debug_screenshots", exist_ok=True)
     os.makedirs("debug_screenshots/preprocessing", exist_ok=True)
     os.makedirs("debug_screenshots/target_cell", exist_ok=True)
     
-    # Run tests
-    test_ocr_service()
+    # Run trigger pattern test
+    test_trigger_patterns()
     
-    # Uncomment to test specific area
+    # Run original tests
+    # test_ocr_service()
     # test_specific_area()
     
     print("\n🏁 All tests completed!")

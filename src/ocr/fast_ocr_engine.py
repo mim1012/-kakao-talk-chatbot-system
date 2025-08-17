@@ -137,27 +137,36 @@ class FastOCREngine:
         
         # 스레드 풀
         self.executor = ThreadPoolExecutor(max_workers=num_workers)
+    
+    def _create_safe_paddle_ocr(self, **kwargs) -> PaddleOCR:
+        """안전한 PaddleOCR 인스턴스 생성 (최소 파라미터만 사용)"""
+        try:
+            # 최소한의 안전한 파라미터만 사용
+            if self.use_gpu:
+                # GPU 시도
+                try:
+                    return PaddleOCR(lang='korean', use_angle_cls=False, use_gpu=True)
+                except Exception as gpu_error:
+                    self.logger.info(f"GPU 모드 초기화 실패 (정상 동작): {gpu_error}")
+                    self.logger.info("CPU 모드로 자동 전환됩니다.")
+            
+            # CPU 모드 (가장 안전)
+            return PaddleOCR(lang='korean', use_angle_cls=False)
+            
+        except Exception as e:
+            self.logger.warning(f"한국어 모드 실패, 기본 모드로 전환: {e}")
+            # 최후의 수단: 기본값만 사용
+            return PaddleOCR()
         
     def _init_ocr_pool(self):
         """OCR 인스턴스 풀 초기화"""
         for i in range(self.num_workers):
             try:
-                ocr = PaddleOCR(
-                    use_angle_cls=False,
-                    lang='korean',
-                    use_gpu=self.use_gpu,
-                    show_log=False,
-                    det_db_thresh=0.3,
-                    det_db_box_thresh=0.5,
-                    rec_batch_num=6,  # 배치 크기 증가
-                    max_text_length=25,
-                    use_mp=True,  # 멀티프로세싱 사용
-                    total_process_num=2,
-                    det_limit_side_len=960,  # 더 작은 크기로 제한
-                    det_limit_type='min',
-                    drop_score=0.5
-                )
+                # 안전한 PaddleOCR 인스턴스 생성 (파라미터 없이)
+                ocr = self._create_safe_paddle_ocr()
                 self.ocr_pool.append(ocr)
+                if i == 0:
+                    self.logger.info(f"OCR 인스턴스 풀 초기화 완료 ({self.num_workers}개)")
             except Exception as e:
                 self.logger.error(f"OCR 인스턴스 {i} 생성 실패: {e}")
     
@@ -190,29 +199,54 @@ class FastOCREngine:
         ocr = self._get_ocr_instance()
         if not ocr:
             # 풀이 비어있으면 새로 생성
-            ocr = PaddleOCR(
-                use_angle_cls=False,
-                lang='korean',
-                use_gpu=self.use_gpu,
-                show_log=False
-            )
+            ocr = self._create_safe_paddle_ocr()
         
         try:
-            results = ocr.ocr(preprocessed, cls=False)
+            results = ocr.ocr(preprocessed)
+            
+            # 디버그 로그 추가
+            self.logger.info(f"PaddleOCR 원시 결과: {results}")
+            if results and len(results) > 0 and results[0] is not None:
+                self.logger.info(f"OCR 감지된 라인 수: {len(results[0])}")
+                for i, line in enumerate(results[0]):
+                    self.logger.info(f"  라인 {i}: {line}")
+                    if line and len(line) >= 2:
+                        self.logger.info(f"    좌표: {line[0]}")
+                        self.logger.info(f"    텍스트 정보: {line[1]}")
+            else:
+                self.logger.info("OCR 결과 없음 또는 빈 결과")
             
             # 결과 파싱
             text = ""
             confidence = 0.0
             
-            if results and results[0]:
+            if results and len(results) > 0 and results[0]:
                 texts = []
                 confidences = []
                 for line in results[0]:
-                    if line and len(line) >= 2:
-                        txt = line[1][0] if line[1] else ""
-                        conf = line[1][1] if line[1] and len(line[1]) > 1 else 0.0
-                        texts.append(txt)
-                        confidences.append(conf)
+                    try:
+                        # 안전한 라인 검증
+                        if not line or not isinstance(line, (list, tuple)) or len(line) < 2:
+                            continue
+                            
+                        # 텍스트 정보 안전하게 추출
+                        if line[1]:
+                            text_info = line[1]
+                            if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                                txt = str(text_info[0]) if text_info[0] else ""
+                                conf = float(text_info[1]) if text_info[1] is not None else 0.0
+                            elif isinstance(text_info, str):
+                                txt = text_info
+                                conf = 0.8  # 기본 신뢰도
+                            else:
+                                continue
+                            
+                            if txt.strip():  # 빈 텍스트 제외
+                                texts.append(txt)
+                                confidences.append(conf)
+                    except (IndexError, TypeError, ValueError):
+                        # 파싱 오류 시 해당 라인 건너뛰기
+                        continue
                 
                 text = " ".join(texts)
                 confidence = sum(confidences) / len(confidences) if confidences else 0.0
@@ -265,13 +299,7 @@ class FastOCREngine:
         ocr = self._get_ocr_instance()
         
         if not ocr:
-            ocr = PaddleOCR(
-                use_angle_cls=False,
-                lang='korean',
-                use_gpu=self.use_gpu,
-                show_log=False,
-                rec_batch_num=len(images)  # 전체를 한 배치로
-            )
+            ocr = self._create_safe_paddle_ocr()
         
         try:
             # 전처리
@@ -288,21 +316,39 @@ class FastOCREngine:
                     continue
                 
                 # OCR 실행
-                ocr_results = ocr.ocr(img, cls=False)
+                ocr_results = ocr.ocr(img)
                 
                 # 결과 파싱
                 text = ""
                 confidence = 0.0
                 
-                if ocr_results and ocr_results[0]:
+                if ocr_results and len(ocr_results) > 0 and ocr_results[0]:
                     texts = []
                     confidences = []
                     for line in ocr_results[0]:
-                        if line and len(line) >= 2:
-                            txt = line[1][0] if line[1] else ""
-                            conf = line[1][1] if line[1] and len(line[1]) > 1 else 0.0
-                            texts.append(txt)
-                            confidences.append(conf)
+                        try:
+                            # 안전한 라인 검증
+                            if not line or not isinstance(line, (list, tuple)) or len(line) < 2:
+                                continue
+                                
+                            # 텍스트 정보 안전하게 추출
+                            if line[1]:
+                                text_info = line[1]
+                                if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                                    txt = str(text_info[0]) if text_info[0] else ""
+                                    conf = float(text_info[1]) if text_info[1] is not None else 0.0
+                                elif isinstance(text_info, str):
+                                    txt = text_info
+                                    conf = 0.8  # 기본 신뢰도
+                                else:
+                                    continue
+                                
+                                if txt.strip():  # 빈 텍스트 제외
+                                    texts.append(txt)
+                                    confidences.append(conf)
+                        except (IndexError, TypeError, ValueError):
+                            # 파싱 오류 시 해당 라인 건너뛰기
+                            continue
                     
                     text = " ".join(texts)
                     confidence = sum(confidences) / len(confidences) if confidences else 0.0

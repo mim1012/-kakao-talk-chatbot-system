@@ -13,8 +13,8 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Tuple
-from src.core.config_manager import ConfigManager
-from src.ocr.enhanced_ocr_corrector import EnhancedOCRCorrector
+from core.config_manager import ConfigManager
+from ocr.enhanced_ocr_corrector import EnhancedOCRCorrector
 
 
 class OCRResult:
